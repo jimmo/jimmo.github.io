@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <style>
+     body {
+       font-family: sans;
+     }
+     textarea {
+       width: 500px;
+       height: 400px;
+     }
+    </style>
+  </head>
+  <body>
+    <p style="display: inline-block;">
+      HTML:<br>
+      <textarea id="text_input">
+      </textarea>
+    </p>
+    <p style="display: inline-block;">
+      Markdown:<br>
+      <textarea id="text_output"></textarea>
+    </p>
+    <p>
+      <button id="convert">Convert</button>
+    </p>
+  </body>
+  <script type="text/javascript">
+   function fix_inline($elem) {
+     $elem.find('a').each(function(i, a) {
+       let $a = $(a);
+       $a.replaceWith('[' + $a.text() + '](' + $a.attr('href') + ')');
+     });
+     $elem.find('code').each(function(i, code) {
+       let $code = $(code);
+       $code.replaceWith('`' + $code.text() + '`');
+     });
+     $elem.find('em').each(function(i, em) {
+       $(em).replaceWith('*' + $(em).text() + '*');
+     });
+     $elem.find('strong').each(function(i, strong) {
+       $(strong).replaceWith('**' + $(strong).text() + '**');
+     });
+     $elem.find('p').each(function(i, p) {
+       $(p).replaceWith($(p).html().trim());
+     });
+     return $elem.html().trim();
+   }
+
+   $('#convert').on('click', function() {
+     let $container = $('<div>');
+     $container.html($('#text_input').val());
+     let output = [];
+     let lastEg = null;
+     $container.children().each(function(i, elem) {
+       let $elem = $(elem);
+       console.log(elem.tagName);
+       if (elem.tagName === 'P') {
+	 output.push(fix_inline($elem) + '\n');
+       } else if (elem.tagName === 'ASIDE') {
+	 let $h2 = $elem.find('> h2');
+	 output.push('> ## ' + fix_inline($h2));
+	 $h2.remove();
+	 output.push('> ' + fix_inline($elem).split('\n').join('\n > ') + '\n');
+       } else if (elem.tagName === 'PRE') {
+	 let info = '';
+	 let $code = $elem.find('> code');
+	 if ($elem.data('eg-id')) {
+	   if ($elem.data('eg-id') === lastEg) {
+	     info += 'eg:last;';
+	   } else {
+	     info += 'eg:' + $elem.data('eg-id') + ';';
+	   }
+	   lastEg = $elem.data('eg-id')
+	 }
+	 if ($elem.css('display') === 'none') {
+	   info += 'hidden;';
+	 }
+	 if ($code.data('lang')) {
+	   info += 'lang:' + $code.data('lang') + ';';
+	 }
+	 if ($code.data('path')) {
+	   info += 'path:' + $code.data('path') + ';';
+	 }
+	 if ($elem.attr('data-runnable') === 'false') {
+	   info += 'norun;';
+	 }
+	 if ($elem.hasClass('js-terminal')) {
+	   info += 'terminal;';
+	 }
+	 if ($elem.hasClass('js-device-animation')) {
+	   info += 'device-animation;';
+	   // todo: loop
+	 }
+	 if ($elem.hasClass('js-device-output')) {
+	   info += 'device-output;';
+	 }
+	 if ($elem.hasClass('js-image-ordering')) {
+	   info += 'image-ordering;';
+	   // todo: animate
+	 }
+	 if ($elem.hasClass('js-logo-animation')) {
+	   info += 'logo-animation;';
+	 }
+	 if ($elem.hasClass('js-logo-final')) {
+	   info += 'logo-final;';
+	 }
+	 output.push('```' + info + '\n' + $code.html() + '\n```\n');
+       } else if (elem.tagName === 'FIGURE') {
+	 output.push('![' + fix_inline($elem.find('figcaption')) + '](' + $elem.find('img').attr('src') + ')');
+       } else if (elem.tagName === 'UL') {
+	 $elem.find('> li').each(function(j, listelem) {
+	   output.push('* ' + fix_inline($(listelem)));
+	 });
+	 output.push('\n');
+       }
+     });
+     $('#text_output').val(output.join('\n'));
+   });
+  </script>
+</html>
