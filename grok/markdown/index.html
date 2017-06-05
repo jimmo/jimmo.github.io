@@ -15,8 +15,7 @@
   <body>
     <p style="display: inline-block;">
       HTML:<br>
-      <textarea id="text_input">
-      </textarea>
+      <textarea id="text_input"></textarea>
     </p>
     <p style="display: inline-block;">
       Markdown:<br>
@@ -51,7 +50,7 @@
    $('#convert').on('click', function() {
      let $container = $('<div>');
      $container.html($('#text_input').val());
-     let output = [];
+     let output = ['#markdown'];
      let lastEg = null;
      $container.children().each(function(i, elem) {
        let $elem = $(elem);
@@ -87,7 +86,12 @@
 	   info += 'norun;';
 	 }
 	 if ($elem.hasClass('js-terminal')) {
-	   info += 'terminal;';
+           info += 'terminal;';
+           if (!$elem.data('eg-id')) {
+	     info += 'eg:none;';
+	   }
+           let x = $code.html().trim().replace(/<\/?o>/g, '').replace(/<i>/g, '@@@').replace(/<\/i>/g, '');
+           $code.html(x);
 	 }
 	 if ($elem.hasClass('js-device-animation')) {
 	   info += 'device-animation;';
