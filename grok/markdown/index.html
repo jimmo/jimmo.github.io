@@ -118,6 +118,8 @@
 	   output.push('* ' + fix_inline($(listelem)));
 	 });
 	 output.push('\n');
+       } else {
+	 output.push(elem.outerHTML + '\n');
        }
      });
      $('#text_output').val(output.join('\n'));
