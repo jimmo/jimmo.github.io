@@ -82,6 +82,12 @@
 	 if ($code.data('path')) {
 	   info += 'path:' + $code.data('path') + ';';
 	 }
+	 if ($elem.data('path')) {
+	   info += 'path:' + $elem.data('path') + ';';
+	 }
+	 if ($elem.data('content-url')) {
+	   info += 'content-url:' + $elem.data('content-url') + ';';
+	 }
 	 if ($elem.attr('data-runnable') === 'false') {
 	   info += 'norun;';
 	 }
