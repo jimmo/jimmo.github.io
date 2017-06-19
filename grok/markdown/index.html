@@ -124,6 +124,11 @@
 	   output.push('* ' + fix_inline($(listelem)));
 	 });
 	 output.push('\n');
+       } else if (elem.tagName === 'OL') {
+	 $elem.find('> li').each(function(j, listelem) {
+	   output.push((j+1) + '. ' + fix_inline($(listelem)));
+	 });
+	 output.push('\n');
        } else {
 	 output.push(elem.outerHTML + '\n');
        }
