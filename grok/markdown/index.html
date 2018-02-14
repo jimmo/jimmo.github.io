@@ -36,10 +36,10 @@
        $code.replaceWith('`' + $code.text() + '`');
      });
      $elem.find('em').each(function(i, em) {
-       $(em).replaceWith('*' + $(em).text() + '*');
+       $(em).replaceWith('*' + $(em).html() + '*');
      });
      $elem.find('strong').each(function(i, strong) {
-       $(strong).replaceWith('**' + $(strong).text() + '**');
+       $(strong).replaceWith('**' + $(strong).html() + '**');
      });
      $elem.find('p').each(function(i, p) {
        $(p).replaceWith($(p).html().trim());
