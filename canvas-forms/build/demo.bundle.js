@@ -166,7 +166,7 @@
                   throw new Error('All controls in the same constraint must share the same parent.');
               }
           }
-          this.parent.childConstraints.push(this);
+          this.parent.addConstraint(this);
           this.parent.relayout();
       }
       remove() {
@@ -174,13 +174,7 @@
               this.controls[i].unrefConstraint(this, this.coords[i].axis);
           }
           if (this.parent) {
-              for (let i = 0; i < this.parent.childConstraints.length; ++i) {
-                  if (this.parent.childConstraints[i] === this) {
-                      this.parent.childConstraints.splice(i, 1);
-                      this.parent.relayout();
-                      return;
-                  }
-              }
+              this.parent.removeConstraint(this);
           }
       }
       static setCoord(control, coord, v) {
@@ -417,6 +411,84 @@
   }
   //# sourceMappingURL=align.js.map
 
+  class CenterConstraint extends Constraint {
+      constructor(control, axis) {
+          super([control], [Coord.create(axis, CoordType.A)]);
+          this.parentCoord = Coord.create(axis, CoordType.B);
+          this.controlCoord = Coord.create(axis, CoordType.B);
+      }
+      removeControl(control) {
+          if (control !== this.controls[0]) {
+              throw new Error('CenterConstraint removed from incorrect control.');
+          }
+          this.remove();
+      }
+      paint(ctx) {
+          Constraint.drawCoord(ctx, 'pink', this.controls[0], this.coords[0], 0);
+      }
+      apply() {
+          const control = this.controls[0];
+          const p = Constraint.getCoord(control.parent, this.parentCoord);
+          if (p === null) {
+              return false;
+          }
+          const c = Constraint.getCoord(control, this.parentCoord);
+          if (c === null) {
+              return false;
+          }
+          Constraint.setCoord(control, this.coords[0], Math.floor((p - c) / 2));
+          return super.apply();
+      }
+  }
+  //# sourceMappingURL=center.js.map
+
+  class ContentConstraint extends Constraint {
+      constructor(control, axis, padding, min) {
+          super([control], [Coord.create(axis, CoordType.B)]);
+          this.padding = padding;
+          this.min = min;
+          this.padding = this.padding || 0;
+          this.min = this.min || 0;
+          if (this.coords[0] !== Coord.W && this.coords[0] !== Coord.H) {
+              throw new Error('Can only set content constraints on width/height.');
+          }
+      }
+      removeControl(control) {
+          if (control !== this.controls[0]) {
+              throw new Error('ContentConstraint removed from incorrect control.');
+          }
+          this.remove();
+      }
+      paint(ctx) {
+          Constraint.drawCoord(ctx, 'green', this.controls[0], this.coords[0], 0);
+      }
+      apply() {
+          let v = 0;
+          for (const c of this.controls[0].controls) {
+              let cv = 0;
+              if (this.coords[0].axis === CoordAxis.X) {
+                  cv = Constraint.getCoord(c, Coord.XW);
+              }
+              else if (this.coords[0].axis === CoordAxis.Y) {
+                  cv = Constraint.getCoord(c, Coord.YH);
+              }
+              if (cv === null) {
+                  return false;
+              }
+              v = Math.max(v, cv);
+          }
+          Constraint.setCoord(this.controls[0], this.coords[0], Math.max(this.min, v + this.padding));
+          return true;
+      }
+      setPadding(padding) {
+          this.padding = padding || 0;
+      }
+      setMinimum(min) {
+          this.min = min || 0;
+      }
+  }
+  //# sourceMappingURL=content.js.map
+
   class FillConstraint extends Constraint {
       constructor(controls, coord, ratios) {
           super(controls, FillConstraint.makeCoords(controls, coord));
@@ -574,6 +646,10 @@
           if (this.v !== v) {
               this.v = v;
               this.controls[0].relayout();
+              return true;
+          }
+          else {
+              return false;
           }
       }
       add(dv) {
@@ -590,85 +666,27 @@
   }
   //# sourceMappingURL=static.js.map
 
-  class ContentConstraint extends Constraint {
-      constructor(control, axis, padding, min) {
-          super([control], [Coord.create(axis, CoordType.B)]);
-          this.padding = padding;
-          this.min = min;
-          this.padding = this.padding || 0;
-          this.min = this.min || 0;
-          if (this.coords[0] !== Coord.W && this.coords[0] !== Coord.H) {
-              throw new Error('Can only set content constraints on width/height.');
-          }
-      }
-      removeControl(control) {
-          if (control !== this.controls[0]) {
-              throw new Error('ContentConstraint removed from incorrect control.');
-          }
-          this.remove();
-      }
-      paint(ctx) {
-          Constraint.drawCoord(ctx, 'green', this.controls[0], this.coords[0], 0);
-      }
-      apply() {
-          let v = 0;
-          for (const c of this.controls[0].controls) {
-              let cv = 0;
-              if (this.coords[0].axis === CoordAxis.X) {
-                  cv = Constraint.getCoord(c, Coord.XW);
-              }
-              else if (this.coords[0].axis === CoordAxis.Y) {
-                  cv = Constraint.getCoord(c, Coord.YH);
-              }
-              if (cv === null) {
-                  return false;
-              }
-              v = Math.max(v, cv);
-          }
-          Constraint.setCoord(this.controls[0], this.coords[0], Math.max(this.min, v + this.padding));
-          return true;
-      }
-      setPadding(padding) {
-          this.padding = padding || 0;
-      }
-      setMinimum(min) {
-          this.min = min || 0;
-      }
-  }
-  //# sourceMappingURL=content.js.map
-
-  class CenterConstraint extends Constraint {
-      constructor(control, axis) {
-          super([control], [Coord.create(axis, CoordType.A)]);
-          this.parentCoord = Coord.create(axis, CoordType.B);
-          this.controlCoord = Coord.create(axis, CoordType.B);
-      }
-      removeControl(control) {
-          if (control !== this.controls[0]) {
-              throw new Error('CenterConstraint removed from incorrect control.');
-          }
-          this.remove();
-      }
-      paint(ctx) {
-          Constraint.drawCoord(ctx, 'pink', this.controls[0], this.coords[0], 0);
-      }
-      apply() {
-          const control = this.controls[0];
-          const p = Constraint.getCoord(control.parent, this.parentCoord);
-          if (p === null) {
-              return false;
-          }
-          const c = Constraint.getCoord(control, this.parentCoord);
-          if (c === null) {
-              return false;
-          }
-          Constraint.setCoord(control, this.coords[0], Math.floor((p - c) / 2));
-          return super.apply();
-      }
-  }
-
   //# sourceMappingURL=index.js.map
 
+  class EventListener {
+      constructor(callback, limit) {
+          this.callback = callback;
+          this.limit = limit;
+      }
+      fire(data) {
+          if (!this.limit) {
+              this.callback(data);
+              return;
+          }
+          if (this.timeout) {
+              window.clearTimeout(this.timeout);
+          }
+          this.timeout = window.setTimeout(() => {
+              this.timeout = null;
+              this.callback(data);
+          }, this.limit);
+      }
+  }
   class EventSource {
       constructor(addCallback) {
           this.listeners = [];
@@ -677,15 +695,15 @@
       fire(data) {
           for (const h of this.listeners) {
               try {
-                  h(data);
+                  h.fire(data);
               }
               catch (ex) {
                   console.log('Exception in event handler', ex);
               }
           }
       }
-      add(h) {
-          this.listeners.push(h);
+      add(h, limit) {
+          this.listeners.push(new EventListener(h, limit));
           if (this.addCallback) {
               this.addCallback();
           }
@@ -788,13 +806,13 @@
   }
   class Control {
       constructor() {
-          this.controls = [];
-          this.childConstraints = [];
+          this._controls = [];
+          this._childConstraints = [];
           this.refConstraintsX = [];
           this.refConstraintsY = [];
           this.constraintsAppliedX = 0;
           this.constraintsAppliedY = 0;
-          this.parent = null;
+          this._parent = null;
           this._enableHitDetection = false;
           this._enableHitDetectionForChild = false;
           this.x = null;
@@ -809,11 +827,9 @@
           this.y2h = null;
           this.clip = true;
           this.focused = false;
-          this.fontSize = null;
-          this.fontName = null;
-          this.color = null;
-          this.border = false;
-          this.opacity = 1;
+          this.hovered = false;
+          this._border = false;
+          this._opacity = 1;
           this.dragTarget = false;
           this.mousedown = new EventSource(() => {
               this.enableHitDetection();
@@ -853,58 +869,58 @@
               prevUnspecified = unspecified([this.x, this.w, this.x2, this.x2w, this.xw]);
               if (nn(this.x) && nn(this.w)) {
                   this.xw = this.x + this.w;
-                  if (nn(this.parent.w)) {
-                      this.x2 = this.parent.w - this.x - this.w;
+                  if (nn(this._parent.w)) {
+                      this.x2 = this._parent.w - this.x - this.w;
                       this.x2w = this.x2 + this.w;
                   }
               }
               else if (nn(this.x) && nn(this.x2)) {
-                  if (nn(this.parent.w)) {
-                      this.w = this.parent.w - this.x - this.x2;
+                  if (nn(this._parent.w)) {
+                      this.w = this._parent.w - this.x - this.x2;
                       this.xw = this.x + this.w;
                       this.x2w = this.x2 + this.w;
                   }
               }
               else if (nn(this.x) && nn(this.xw)) {
                   this.w = this.xw - this.x;
-                  if (nn(this.parent.w)) {
-                      this.x2 = this.parent.w - this.xw;
+                  if (nn(this._parent.w)) {
+                      this.x2 = this._parent.w - this.xw;
                       this.x2w = this.x2 + this.w;
                   }
               }
               else if (nn(this.x) && nn(this.x2w)) ;
               else if (nn(this.w) && nn(this.x2)) {
-                  if (nn(this.parent.w)) {
-                      this.x = this.parent.w - this.w - this.x2;
+                  if (nn(this._parent.w)) {
+                      this.x = this._parent.w - this.w - this.x2;
                       this.xw = this.x + this.w;
                   }
                   this.x2w = this.x2 + this.w;
               }
               else if (nn(this.w) && nn(this.xw)) {
                   this.x = this.xw - this.w;
-                  if (nn(this.parent.w)) {
-                      this.x2 = this.parent.w - this.xw;
+                  if (nn(this._parent.w)) {
+                      this.x2 = this._parent.w - this.xw;
                       this.x2w = this.x2 + this.w;
                   }
               }
               else if (nn(this.w) && nn(this.x2w)) {
                   this.x2 = this.x2w - this.w;
-                  if (nn(this.parent.w)) {
-                      this.x = this.parent.w - this.x2w;
+                  if (nn(this._parent.w)) {
+                      this.x = this._parent.w - this.x2w;
                       this.xw = this.x + this.w;
                   }
               }
               else if (nn(this.x2) && nn(this.xw)) ;
               else if (nn(this.x2) && nn(this.x2w)) {
                   this.w = this.x2w - this.x2;
-                  if (nn(this.parent.w)) {
-                      this.x = this.parent.w - this.x2w;
+                  if (nn(this._parent.w)) {
+                      this.x = this._parent.w - this.x2w;
                       this.xw = this.x + this.w;
                   }
               }
               else if (nn(this.xw) && nn(this.x2w)) {
-                  if (nn(this.parent.w)) {
-                      this.w = -(this.parent.w - this.xw - this.x2w);
+                  if (nn(this._parent.w)) {
+                      this.w = -(this._parent.w - this.xw - this.x2w);
                       this.x = this.xw - this.w;
                       this.x2 = this.x2w - this.w;
                   }
@@ -915,58 +931,58 @@
               prevUnspecified = unspecified([this.y, this.h, this.y2, this.y2h, this.yh]);
               if (nn(this.y) && nn(this.h)) {
                   this.yh = this.y + this.h;
-                  if (nn(this.parent.h)) {
-                      this.y2 = this.parent.h - this.y - this.h;
+                  if (nn(this._parent.h)) {
+                      this.y2 = this._parent.h - this.y - this.h;
                       this.y2h = this.y2 + this.h;
                   }
               }
               else if (nn(this.y) && nn(this.y2)) {
-                  if (nn(this.parent.h)) {
-                      this.h = this.parent.h - this.y - this.y2;
+                  if (nn(this._parent.h)) {
+                      this.h = this._parent.h - this.y - this.y2;
                       this.yh = this.y + this.h;
                       this.y2h = this.y2 + this.h;
                   }
               }
               else if (nn(this.y) && nn(this.yh)) {
                   this.h = this.yh - this.y;
-                  if (nn(this.parent.h)) {
-                      this.y2 = this.parent.h - this.yh;
+                  if (nn(this._parent.h)) {
+                      this.y2 = this._parent.h - this.yh;
                       this.y2h = this.y2 + this.h;
                   }
               }
               else if (nn(this.y) && nn(this.y2h)) ;
               else if (nn(this.h) && nn(this.y2)) {
-                  if (nn(this.parent.h)) {
-                      this.y = this.parent.h - this.h - this.y2;
+                  if (nn(this._parent.h)) {
+                      this.y = this._parent.h - this.h - this.y2;
                       this.yh = this.y + this.h;
                   }
                   this.y2h = this.y2 + this.h;
               }
               else if (nn(this.h) && nn(this.yh)) {
                   this.y = this.yh - this.h;
-                  if (nn(this.parent.h)) {
-                      this.y2 = this.parent.h - this.yh;
+                  if (nn(this._parent.h)) {
+                      this.y2 = this._parent.h - this.yh;
                       this.y2h = this.y2 + this.h;
                   }
               }
               else if (nn(this.h) && nn(this.y2h)) {
                   this.y2 = this.y2h - this.h;
-                  if (nn(this.parent.h)) {
-                      this.y = this.parent.h - this.y2h;
+                  if (nn(this._parent.h)) {
+                      this.y = this._parent.h - this.y2h;
                       this.yh = this.y + this.h;
                   }
               }
               else if (nn(this.y2) && nn(this.yh)) ;
               else if (nn(this.y2) && nn(this.y2h)) {
                   this.h = this.y2h - this.y2;
-                  if (nn(this.parent.h)) {
-                      this.y = this.parent.h - this.y2h;
+                  if (nn(this._parent.h)) {
+                      this.y = this._parent.h - this.y2h;
                       this.yh = this.y + this.h;
                   }
               }
               else if (nn(this.yh) && nn(this.y2h)) {
-                  if (nn(this.parent.h)) {
-                      this.h = -(this.parent.h - this.yh - this.y2h);
+                  if (nn(this._parent.h)) {
+                      this.h = -(this._parent.h - this.yh - this.y2h);
                       this.y = this.yh - this.h;
                       this.y2 = this.y2h - this.h;
                   }
@@ -974,7 +990,7 @@
               nowUnspecified = unspecified([this.y, this.h, this.y2, this.y2h, this.yh]);
           }
           if (prevUnspecified !== nowUnspecified) {
-              for (const c of this.controls) {
+              for (const c of this._controls) {
                   c.recalculate(axis);
               }
           }
@@ -984,10 +1000,10 @@
           this.enableChildHitDetectionOnParent();
       }
       enableChildHitDetectionOnParent() {
-          let p = this.parent;
+          let p = this._parent;
           while (p) {
               p._enableHitDetectionForChild = true;
-              p = p.parent;
+              p = p._parent;
           }
       }
       controlAtPoint(x, y, opts) {
@@ -996,11 +1012,11 @@
           opts.formX = (opts.formX === undefined) ? x : opts.formX;
           opts.formY = (opts.formY === undefined) ? y : opts.formY;
           opts.exclude = opts.exclude || [];
-          for (let i = this.controls.length - 1; i >= 0; --i) {
-              const c = this.controls[i];
-              if (opts.exclude.indexOf(c) >= 0) {
-                  continue;
-              }
+          if (opts.exclude.indexOf(this) >= 0) {
+              return null;
+          }
+          for (let i = this._controls.length - 1; i >= 0; --i) {
+              const c = this._controls[i];
               const cx = x - c.x;
               const cy = y - c.y;
               if ((opts.all || c._enableHitDetection || c._enableHitDetectionForChild) && c.inside(cx, cy)) {
@@ -1010,12 +1026,29 @@
                   }
               }
           }
-          if (this._enableHitDetection) {
+          if (opts.all || this._enableHitDetection) {
               return new ControlAtPointData(this, x, y, opts.formX, opts.formY);
+          }
+          else {
+              return null;
           }
       }
       inside(x, y) {
           return x >= 0 && y >= 0 && x < this.w && y < this.h;
+      }
+      get border() {
+          return this._border;
+      }
+      set border(value) {
+          this._border = value;
+          this.repaint();
+      }
+      get opacity() {
+          return this._opacity;
+      }
+      set opacity(value) {
+          this._opacity = Math.max(0, Math.min(1, value));
+          this.repaint();
       }
       refConstraint(constraint, axis) {
           if (axis === CoordAxis.X) {
@@ -1039,6 +1072,18 @@
                   throw new Error('Unable to unref constraint.');
               }
               this.refConstraintsY.splice(i, 1);
+          }
+      }
+      addConstraint(constraint) {
+          this._childConstraints.push(constraint);
+      }
+      removeConstraint(constraint) {
+          for (let i = 0; i < this._childConstraints.length; ++i) {
+              if (this._childConstraints[i] === constraint) {
+                  this._childConstraints.splice(i, 1);
+                  this.relayout();
+                  return;
+              }
           }
       }
       applyDefaultLayout(axis) {
@@ -1098,7 +1143,7 @@
           this.y2h = null;
           this.constraintsAppliedX = 0;
           this.constraintsAppliedY = 0;
-          for (const control of this.controls) {
+          for (const control of this._controls) {
               control.resetLayout();
           }
           if (this.selfConstrain()) {
@@ -1113,10 +1158,10 @@
           }
       }
       findConstraints(pending) {
-          for (const c of this.childConstraints) {
+          for (const c of this._childConstraints) {
               pending.push(c);
           }
-          for (const c of this.controls) {
+          for (const c of this._controls) {
               c.findConstraints(pending);
           }
       }
@@ -1127,12 +1172,12 @@
                   throw new Error('Control was not fully specified after layout.');
               }
           }
-          for (const control of this.controls) {
+          for (const control of this._controls) {
               control.layoutComplete();
           }
       }
       layoutAttempt(round) {
-          for (const control of this.controls) {
+          for (const control of this._controls) {
               control.resetLayout();
           }
           let i = 0;
@@ -1192,7 +1237,8 @@
       unpaint() {
       }
       paint(ctx) {
-          for (const c of this.controls) {
+          this.paintBackground(ctx);
+          for (const c of this._controls) {
               if (!this.shouldPaint(c)) {
                   c.unpaint();
                   continue;
@@ -1214,7 +1260,7 @@
               ctx.restore();
           }
           if (this.editing()) {
-              for (const c of this.controls) {
+              for (const c of this._controls) {
                   if (!this.shouldPaint(c)) {
                       continue;
                   }
@@ -1234,30 +1280,45 @@
           }
           this.paintDecorations(ctx);
       }
+      paintBackground(ctx) {
+      }
       paintDecorations(ctx) {
           if (this.border) {
-              ctx.lineWidth = 1;
-              ctx.lineJoin = 'round';
-              ctx.beginPath();
-              ctx.moveTo(0, this.h);
-              ctx.lineTo(0, 0);
-              ctx.lineTo(this.w, 0);
-              ctx.strokeStyle = '#202020';
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.moveTo(this.w, 0);
-              ctx.lineTo(this.w, this.h);
-              ctx.lineTo(0, this.h);
-              ctx.strokeStyle = '#707070';
-              ctx.stroke();
+              this.paintBorder(ctx);
           }
+      }
+      paintBorder(ctx) {
+          ctx.lineWidth = 1;
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, this.h);
+          ctx.lineTo(0, 0);
+          ctx.lineTo(this.w, 0);
+          if (this.dragTarget) {
+              ctx.strokeStyle = '#2020a0';
+          }
+          else {
+              ctx.strokeStyle = '#202020';
+          }
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(this.w, 0);
+          ctx.lineTo(this.w, this.h);
+          ctx.lineTo(0, this.h);
+          if (this.dragTarget) {
+              ctx.strokeStyle = '#7070c0';
+          }
+          else {
+              ctx.strokeStyle = '#707070';
+          }
+          ctx.stroke();
       }
       add(control, x, y, w, h, x2, y2, xw, yh, x2w, y2h) {
           if (x && typeof x === 'object') {
-              return this.add(control, x['x'], x['y'], x['w'], x['h'], x['x2'], x['y2'], x['xw'], x['yh'], x['x2w'], x['y2w']);
+              return this.add(control, x.x, x.y, x.w, x.h, x.x2, x.y2, x.xw, x.yh, x.x2w, x.y2h);
           }
-          control.parent = this;
-          this.controls.push(control);
+          control._parent = this;
+          this._controls.push(control);
           control.coords.x.set(x);
           control.coords.y.set(y);
           control.coords.w.set(w);
@@ -1268,7 +1329,7 @@
           control.coords.yh.set(yh);
           control.coords.x2w.set(x2w);
           control.coords.y2h.set(y2h);
-          if (control._enableHitDetection) {
+          if (control._enableHitDetection || control._enableHitDetectionForChild) {
               control.enableChildHitDetectionOnParent();
           }
           control.added();
@@ -1291,80 +1352,69 @@
           if (this.refConstraintsX.length > 0 || this.refConstraintsY.length > 0) {
               throw new Error('Control still referenced by constraints.');
           }
-          if (this.parent) {
-              for (let i = 0; i < this.parent.controls.length; ++i) {
-                  if (this.parent.controls[i] === this) {
-                      this.parent.controls.splice(i, 1);
+          if (this._parent) {
+              for (let i = 0; i < this._parent.controls.length; ++i) {
+                  if (this._parent.controls[i] === this) {
+                      this._parent.controls.splice(i, 1);
                       break;
                   }
               }
               this.removed();
+              this._parent = null;
           }
       }
       removed() {
       }
       clear() {
-          while (this.controls.length > 0) {
-              this.controls[0].remove();
+          while (this._controls.length > 0) {
+              this._controls[0].remove();
           }
-          if (this.childConstraints.length > 0) {
+          if (this._childConstraints.length > 0) {
               throw new Error('There were still constraints left after removing all controls.');
           }
       }
-      getFont() {
-          return this.getFontSize() + 'px ' + this.getFontName();
-      }
-      getFontSize() {
-          return this.fontSize || this.parent.getFontSize();
-      }
-      getFontName() {
-          return this.fontName || this.parent.getFontName();
-      }
-      getColor() {
-          return this.color || this.parent.getColor();
-      }
       repaint() {
-          if (this.parent) {
-              this.parent.repaint();
+          if (this._parent) {
+              this._parent.repaint();
           }
       }
       relayout() {
-          if (this.parent) {
-              this.parent.relayout();
+          if (this._parent) {
+              this._parent.relayout();
           }
       }
       context() {
-          if (this.parent) {
-              return this.parent.context();
+          if (this._parent) {
+              return this._parent.context();
           }
       }
       editing() {
-          if (this.parent) {
-              return this.parent.editing();
+          if (this._parent) {
+              return this._parent.editing();
           }
           else {
               return false;
           }
       }
       form() {
-          if (this.parent) {
-              return this.parent.form();
+          if (this._parent) {
+              return this._parent.form();
           }
           else {
               return null;
           }
       }
       formX() {
-          if (this.parent) {
-              return this.x + this.parent.formX();
+          if (this._parent) {
+              return this.x + this._parent.formX();
           }
           else {
               return this.x;
           }
       }
       formY() {
-          if (this.parent) {
-              return this.y + this.parent.formY();
+          if (this._parent) {
+              return this.y + this._parent.formY();
           }
           else {
               return this.y;
@@ -1377,8 +1427,8 @@
           return new ControlCoords(this);
       }
       submit() {
-          if (this.parent) {
-              this.parent.submit();
+          if (this._parent) {
+              this._parent.submit();
           }
       }
       allowDrop(data) {
@@ -1386,292 +1436,17 @@
       }
       drop(data) {
       }
+      async contextMenu() {
+          return null;
+      }
+      get controls() {
+          return this._controls;
+      }
+      get parent() {
+          return this._parent;
+      }
   }
   //# sourceMappingURL=control.js.map
-
-  class TextControl extends Control {
-      constructor(text) {
-          super();
-          this.text = text || '';
-      }
-      evalText() {
-          if (this.text instanceof Function) {
-              return this.text();
-          }
-          else {
-              return this.text;
-          }
-      }
-      setText(text) {
-          this.text = text;
-          this.repaint();
-      }
-  }
-  //# sourceMappingURL=textcontrol.js.map
-
-  class Button extends TextControl {
-      constructor(text) {
-          super(text);
-          this.down = false;
-          this.click = new EventSource();
-          this.mousedown.add((ev) => {
-              this.down = true;
-              ev.capture();
-              this.repaint();
-          });
-          this.mouseup.add((ev) => {
-              if (!this.down) {
-                  return;
-              }
-              this.down = false;
-              if (ev.capture && this.inside(ev.x, ev.y)) {
-                  this.click.fire();
-              }
-              this.repaint();
-          });
-      }
-      paint(ctx) {
-          super.paint(ctx);
-          if (this.down) {
-              ctx.fillStyle = '#ff9800';
-          }
-          else {
-              ctx.fillStyle = '#ffeecc';
-          }
-          if (this.down) {
-              ctx.strokeStyle = 'black';
-          }
-          else {
-              ctx.strokeStyle = '#cc8020';
-          }
-          ctx.lineWidth = 1;
-          ctx.lineJoin = 'round';
-          const r = 6;
-          let rl = r;
-          let rr = r;
-          if (this.parent instanceof ButtonGroup) {
-              if (this !== this.parent.controls[0]) {
-                  rl = 0;
-              }
-              if (this !== this.parent.controls[this.parent.controls.length - 1]) {
-                  rr = 0;
-              }
-          }
-          ctx.beginPath();
-          ctx.moveTo(rl, 0);
-          ctx.lineTo(this.w - rr, 0);
-          ctx.arcTo(this.w, 0, this.w, rr, rr);
-          ctx.lineTo(this.w, this.h - rr);
-          ctx.arcTo(this.w, this.h, this.w - rr, this.h, rr);
-          ctx.lineTo(rl, this.h);
-          ctx.arcTo(0, this.h, 0, this.h - rl, rl);
-          ctx.lineTo(0, rl);
-          ctx.arcTo(0, 0, rl, 0, rl);
-          if (this.down) {
-              ctx.shadowColor = '#c0c0c0';
-              ctx.shadowBlur = 8;
-              ctx.shadowOffsetX = 3;
-              ctx.shadowOffsetY = 3;
-          }
-          ctx.fill();
-          ctx.shadowColor = 'transparent';
-          ctx.stroke();
-          ctx.font = this.getFont();
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = this.getColor();
-          ctx.fillText(this.evalText(), this.w / 2, this.h / 2, this.w);
-      }
-  }
-  class ButtonGroup extends Control {
-      constructor() {
-          super();
-      }
-      add(control, x, y, w, h, x2, y2, xw, yh, x2w, y2h) {
-          if (!(control instanceof Button)) {
-              throw new Error('Only Buttons can be added to ButtonGroups');
-          }
-          super.add(control);
-          control.coords.y.set(0);
-          control.coords.y2.set(0);
-          if (this.fill) {
-              this.fill.remove();
-              this.fill = null;
-          }
-          if (this.end) {
-              this.end.remove();
-              this.end = null;
-          }
-          if (this.controls.length === 1) {
-              control.coords.x.set(0);
-          }
-          this.end = control.coords.x2.set(0);
-          if (this.controls.length >= 2) {
-              control.coords.x.align(this.controls[this.controls.length - 2].coords.xw);
-              this.fill = new FillConstraint(this.controls, Coord.W);
-          }
-          return control;
-      }
-  }
-  //# sourceMappingURL=button.js.map
-
-  class CheckBoxToggleEvent extends ControlEvent {
-      constructor(control, checked) {
-          super(control);
-          this.checked = checked;
-      }
-  }
-  class CheckBox extends TextControl {
-      constructor(text, checked) {
-          super(text);
-          this.checked = false;
-          this.down = false;
-          this.checked = this.checked || false;
-          this.on = new EventSource();
-          this.off = new EventSource();
-          this.toggle = new EventSource();
-          this.mousedown.add((ev) => {
-              this.down = true;
-              ev.capture();
-              this.repaint();
-          });
-          this.mouseup.add((ev) => {
-              if (!this.down) {
-                  return;
-              }
-              if (ev.capture && this.inside(ev.x, ev.y)) {
-                  this.setChecked(!this.checked);
-              }
-              this.down = false;
-              this.repaint();
-          });
-      }
-      setChecked(checked) {
-          if (this.checked === checked) {
-              return;
-          }
-          if (this.radio) {
-              this.radio.clear(this);
-          }
-          this.checked = checked;
-          const ev = new CheckBoxToggleEvent(this, this.checked);
-          this.toggle.fire(ev);
-          if (this.checked) {
-              this.on.fire(ev);
-          }
-          else {
-              this.off.fire(ev);
-          }
-      }
-      paint(ctx) {
-          super.paint(ctx);
-          ctx.fillStyle = 'white';
-          if (this.down) {
-              ctx.strokeStyle = 'orange';
-          }
-          else {
-              ctx.strokeStyle = 'black';
-          }
-          ctx.lineJoin = 'round';
-          if (this.radio) {
-              ctx.beginPath();
-              ctx.lineWidth = 1.2;
-              ctx.arc(this.h / 2, this.h / 2, this.h / 2, 0, 2 * Math.PI);
-              ctx.fill();
-              ctx.stroke();
-          }
-          else {
-              ctx.fillRect(0, 0, this.h, this.h);
-              ctx.lineWidth = 1;
-              ctx.strokeRect(0, 0, this.h, this.h);
-          }
-          if (this.checked) {
-              ctx.fillStyle = 'orange';
-              if (this.radio) {
-                  ctx.beginPath();
-                  ctx.arc(this.h / 2, this.h / 2, this.h / 2 - 3, 0, 2 * Math.PI);
-                  ctx.fill();
-              }
-              else {
-                  ctx.fillRect(3, 3, this.h - 6, this.h - 6);
-              }
-          }
-          ctx.font = this.getFont();
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = this.getColor();
-          ctx.fillText(this.evalText(), this.h + 7, this.h / 2, this.w - this.h - 4);
-      }
-  }
-  class RadioGroup {
-      constructor(checkboxes) {
-          this.checkboxes = [];
-          if (checkboxes) {
-              for (const checkbox of checkboxes) {
-                  this.add(checkbox);
-              }
-          }
-      }
-      add(checkbox) {
-          checkbox.radio = this;
-          this.checkboxes.push(checkbox);
-      }
-      clear(selected) {
-          for (const checkbox of this.checkboxes) {
-              if (checkbox === selected) {
-                  continue;
-              }
-              checkbox.setChecked(false);
-          }
-      }
-  }
-  //# sourceMappingURL=checkbox.js.map
-
-  class Modal extends Control {
-      constructor(dialog) {
-          super();
-          this.dialog = dialog;
-          this.add(dialog);
-          this.mousedown.add((ev) => {
-              ev.cancelBubble();
-          });
-      }
-      paint(ctx) {
-          const a = ctx.globalAlpha;
-          ctx.globalAlpha *= 0.5;
-          ctx.fillStyle = 'black';
-          ctx.fillRect(0, 0, this.w, this.h);
-          ctx.globalAlpha = a;
-          super.paint(ctx);
-      }
-      selfConstrain() {
-          this.x = 0;
-          this.y = 0;
-          this.x2 = 0;
-          this.y2 = 0;
-          return true;
-      }
-      static show(dialog, f) {
-          const modal = new Modal(dialog);
-          f.add(modal);
-          f.pushLayer(modal);
-          return new Promise(async (resolve) => {
-              modal.opacity = 0;
-              await new OpacityAnimator(modal, 0, 1, 200).start();
-              modal._resolve = resolve;
-          });
-      }
-      async close(data) {
-          await new OpacityAnimator(this, 1, 0, 200).start();
-          this.form().popLayer(this);
-          this.remove();
-          if (this._resolve) {
-              this._resolve(data);
-              this._resolve = null;
-          }
-      }
-  }
-  //# sourceMappingURL=modal.js.map
 
   function unwrapExports (x) {
   	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
@@ -1951,13 +1726,23 @@
       }
   }
   class SurfaceMouseEvent {
-      constructor(x, y, buttons) {
+      constructor(x, y, button, buttons) {
           this.x = x;
           this.y = y;
+          this.button = button;
           this.buttons = buttons;
       }
       primaryButton() {
           return this.buttons & 1;
+      }
+      secondaryyButton() {
+          return this.buttons & 2;
+      }
+      wasPrimary() {
+          return this.button === 0;
+      }
+      wasSecondary() {
+          return this.button === 1;
       }
   }
   class SurfaceKeyEvent {
@@ -1978,59 +1763,63 @@
           this.mousewheel = new EventSource();
           this.mousedbl = new EventSource();
           this.keydown = new EventSource();
+          this.contextmenu = new EventSource();
           this.container.tabIndex = 1;
           const createTouchEvent = (ev) => {
+              console.log(ev);
+              if (ev.touches.length > 1) {
+                  return null;
+              }
               const rect = ev.currentTarget.getBoundingClientRect();
               const offsetX = ev.changedTouches[0].clientX - rect.left;
               const offsetY = ev.changedTouches[0].clientY - rect.top;
-              return new SurfaceMouseEvent(this.pixels(offsetX), this.pixels(offsetY), ev.touches.length);
+              return new SurfaceMouseEvent(this.pixels(offsetX), this.pixels(offsetY), 0, ev.touches.length);
           };
           const createMouseEvent = (ev) => {
               const rect = ev.currentTarget.getBoundingClientRect();
               const offsetX = ev.clientX - rect.left;
               const offsetY = ev.clientY - rect.top;
-              return new SurfaceMouseEvent(this.pixels(offsetX), this.pixels(offsetY), ev.buttons);
+              return new SurfaceMouseEvent(this.pixels(offsetX), this.pixels(offsetY), ev.button, ev.buttons);
           };
           if (navigator.maxTouchPoints || document.documentElement['ontouchstart']) {
               this.container.addEventListener('touchstart', (ev) => {
-                  this.mousedown.fire(createTouchEvent(ev));
+                  const tev = createTouchEvent(ev);
+                  if (tev) {
+                      this.mousedown.fire(tev);
+                  }
                   if (ev.target === this.container) {
                       ev.preventDefault();
                   }
               });
               this.container.addEventListener('touchend', (ev) => {
-                  this.mouseup.fire(createTouchEvent(ev));
+                  const tev = createTouchEvent(ev);
+                  if (tev) {
+                      this.mouseup.fire(tev);
+                  }
               });
               this.container.addEventListener('touchmove', (ev) => {
-                  this.mousemove.fire(createTouchEvent(ev));
-              });
-              this.container.addEventListener('mousedown', (ev) => {
-                  this.mousedown.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('mouseup', (ev) => {
-                  this.mouseup.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('mousemove', (ev) => {
-                  this.mousemove.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('dblclick', (ev) => {
-                  this.mousedbl.fire(createMouseEvent(ev));
+                  const tev = createTouchEvent(ev);
+                  if (tev) {
+                      this.mousemove.fire(tev);
+                  }
               });
           }
-          else {
-              this.container.addEventListener('mousedown', (ev) => {
-                  this.mousedown.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('mouseup', (ev) => {
-                  this.mouseup.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('mousemove', (ev) => {
-                  this.mousemove.fire(createMouseEvent(ev));
-              });
-              this.container.addEventListener('dblclick', (ev) => {
-                  this.mousedbl.fire(createMouseEvent(ev));
-              });
-          }
+          this.container.addEventListener('mousedown', (ev) => {
+              this.mousedown.fire(createMouseEvent(ev));
+          });
+          this.container.addEventListener('mouseup', (ev) => {
+              this.mouseup.fire(createMouseEvent(ev));
+          });
+          this.container.addEventListener('mousemove', (ev) => {
+              this.mousemove.fire(createMouseEvent(ev));
+          });
+          this.container.addEventListener('dblclick', (ev) => {
+              this.mousedbl.fire(createMouseEvent(ev));
+          });
+          this.container.addEventListener('contextmenu', (ev) => {
+              this.contextmenu.fire(createMouseEvent(ev));
+              ev.preventDefault();
+          });
           this.container.addEventListener('keydown', (ev) => {
               this.keydown.fire(new SurfaceKeyEvent(ev.keyCode));
           });
@@ -2043,7 +1832,7 @@
                   dy *= 20;
               }
               else if (ev.deltaMode === 2) ;
-              this.mousewheel.fire(new SurfaceMouseEvent(this.pixels(ev.offsetX), this.pixels(ev.offsetY), ev.buttons));
+              this.mousewheel.fire(new SurfaceMouseEvent(this.pixels(ev.offsetX), this.pixels(ev.offsetY), 0, ev.buttons));
               this.scroll.fire(new SurfaceScrollEvent(-dx, -dy));
           });
       }
@@ -2107,9 +1896,140 @@
   }
   //# sourceMappingURL=surface.js.map
 
+  class MenuItem extends Control {
+      constructor(text, icon) {
+          super();
+          this.text = text;
+          this.icon = icon;
+          this.click = new EventSource();
+          this.mousedown.add((ev) => {
+              this.down = true;
+              this.repaint();
+          });
+          this.mouseup.add((ev) => {
+              this.down = false;
+              this.click.fire();
+              this.parent.remove();
+          });
+      }
+      paint(ctx) {
+          super.paint(ctx);
+          ctx.font = '18px sans';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#202020';
+          ctx.textAlign = 'left';
+          ctx.fillText(this.text, 3, this.h / 2);
+      }
+      paintBackground(ctx) {
+          if (this.hovered) {
+              ctx.fillStyle = '#ff0098';
+              ctx.fillRect(0, 0, this.w, this.h);
+          }
+          if (this.down) {
+              ctx.fillStyle = '#ff9800';
+              ctx.fillRect(0, 0, this.w, this.h);
+          }
+      }
+      defaultConstraints() {
+          this.coords.w.set(180);
+          this.coords.h.set(32);
+      }
+  }
+  class MenuSeparatorItem extends Control {
+      constructor() {
+          super();
+      }
+      paint(ctx) {
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = '#a0a0a0';
+          ctx.beginPath();
+          ctx.moveTo(10, this.h / 2);
+          ctx.lineTo(this.w - 10, this.h / 2);
+          ctx.stroke();
+      }
+      defaultConstraints() {
+          this.coords.w.set(180);
+          this.coords.h.set(10);
+      }
+  }
+  class Menu extends Control {
+      constructor(items) {
+          super();
+          this.border = true;
+          this.clip = false;
+          let last = null;
+          for (const item of items) {
+              this.add(item, { x: 1 });
+              if (last) {
+                  item.coords.y.align(last.coords.yh);
+              }
+              else {
+                  item.coords.y.set(1);
+              }
+              last = item;
+          }
+          this.mousedown.add((ev) => {
+              if (ev.control === this) {
+                  this.remove();
+                  ev.cancelBubble();
+              }
+          });
+      }
+      defaultConstraints() {
+          super.defaultConstraints();
+          this.coords.x.fit(1);
+          this.coords.y.fit(1);
+      }
+      paintBackground(ctx) {
+          ctx.fillStyle = '#f0f0f0';
+          ctx.shadowColor = '#c0c0c0';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetX = 3;
+          ctx.shadowOffsetY = 3;
+          ctx.fillRect(0, 0, this.w, this.h);
+          ctx.shadowColor = 'transparent';
+      }
+      added() {
+          super.added();
+          this.form().pushLayer(this);
+      }
+      removed() {
+          super.removed();
+          this.form().popLayer(this);
+      }
+  }
+  //# sourceMappingURL=menu.js.map
+
+  class Timer {
+      constructor(callback, delay) {
+          this.callback = callback;
+          this.delay = delay;
+          this.start();
+      }
+      reset() {
+          if (this.timeout) {
+              this.start();
+          }
+      }
+      start() {
+          this.cancel();
+          this.timeout = window.setTimeout(() => {
+              this.timeout = null;
+              this.callback();
+          }, this.delay);
+      }
+      cancel() {
+          if (this.timeout) {
+              window.clearTimeout(this.timeout);
+              this.timeout = null;
+          }
+      }
+  }
+  //# sourceMappingURL=utils.js.map
+
   class FormMouseDownEvent extends SurfaceMouseEvent {
-      constructor(x, y, buttons, form, hit, control) {
-          super(x, y, buttons);
+      constructor(x, y, button, buttons, form, hit, control) {
+          super(x, y, button, buttons);
           this.form = form;
           this.hit = hit;
           this.control = control;
@@ -2128,8 +2048,8 @@
       }
   }
   class FormMouseMoveEvent extends SurfaceMouseEvent {
-      constructor(x, y, buttons, form, dragX, dragY, dx, dy, capture) {
-          super(x, y, buttons);
+      constructor(x, y, button, buttons, form, dragX, dragY, dx, dy, capture) {
+          super(x, y, button, buttons);
           this.form = form;
           this.dragX = dragX;
           this.dragY = dragY;
@@ -2142,9 +2062,13 @@
       }
   }
   class FormMouseUpEvent extends SurfaceMouseEvent {
-      constructor(x, y, buttons, capture) {
-          super(x, y, buttons);
+      constructor(x, y, button, buttons, control, capture) {
+          super(x, y, button, buttons);
+          this.control = control;
           this.capture = capture;
+      }
+      inside() {
+          return this.control.inside(this.x, this.y);
       }
   }
   class FormKeyEvent extends SurfaceKeyEvent {
@@ -2158,18 +2082,15 @@
           this.surface = surface;
           this._pendingLayout = false;
           this._pendingPaint = false;
-          this.fontSize = 18;
-          this.fontName = 'sans';
-          this.color = '#202020';
           this._editing = false;
           this._bubbleMouseDown = true;
           this._layers = [];
           this._animators = [];
-          this.surface.resize.add(data => {
+          this.surface.resize.add(ev => {
               this.x = 0;
               this.y = 0;
-              this.w = data.w;
-              this.h = data.h;
+              this.w = ev.w;
+              this.h = ev.h;
               this.x2 = 0;
               this.y2 = 0;
               this.x2w = this.w;
@@ -2178,26 +2099,31 @@
               this.yh = this.h;
               this.relayout();
           });
-          this.surface.scroll.add(data => {
+          this.surface.scroll.add(ev => {
               if (this._focus) {
                   let c = this._focus.control;
                   while (c) {
-                      if (c.scrollBy(data.dx, data.dy)) {
+                      if (c.scrollBy(ev.dx, ev.dy)) {
                           break;
                       }
                       c = c.parent;
                   }
               }
           });
-          this.surface.mousemove.add(data => {
-              if (this._capture && !data.primaryButton()) {
-                  this._capture.update(data.x, data.y);
-                  this._capture.control.mouseup.fire(new FormMouseUpEvent(this._capture.x, this._capture.y, data.buttons, true));
+          let menuTimer = null;
+          let hovered = new Set();
+          this.surface.mousemove.add(ev => {
+              if (menuTimer) {
+                  menuTimer.reset();
+              }
+              if (this._capture && !ev.primaryButton()) {
+                  this._capture.update(ev.x, ev.y);
+                  this._capture.control.mouseup.fire(new FormMouseUpEvent(this._capture.x, this._capture.y, ev.button, ev.buttons, this._capture.control, true));
                   this.endCapture();
               }
               const restoreCapture = this._capture;
-              if (this._dragCapture && data.primaryButton()) {
-                  if (!this._capture || (data.x !== this._capture.formX || data.y !== this._capture.formY)) {
+              if (this._dragCapture && ev.primaryButton()) {
+                  if (!this._capture || (ev.x !== this._capture.formX || ev.y !== this._capture.formY)) {
                       const newCapture = this._dragCapture;
                       this.endCapture();
                       this._restoreCapture = restoreCapture;
@@ -2205,11 +2131,11 @@
                   }
               }
               if (this._capture && this._dragAllowed) {
-                  this._dragCoordinates = data;
+                  this._dragCoordinates = ev;
                   if (this._dragTargetControl) {
                       this._dragTargetControl.dragTarget = false;
                   }
-                  const dragHit = this.controlAtPoint(data.x, data.y, { all: true });
+                  const dragHit = this.controlAtPoint(ev.x, ev.y, { all: true });
                   if (dragHit) {
                       const dragTarget = dragHit.control;
                       if (dragTarget !== this._capture.control && dragTarget.allowDrop(this._dragData)) {
@@ -2221,60 +2147,92 @@
               let delta = [0, 0];
               let target = this._capture;
               if (target) {
-                  delta = target.update(data.x, data.y);
+                  delta = target.update(ev.x, ev.y);
               }
               else {
-                  target = this.controlAtPoint(data.x, data.y);
+                  target = this.controlAtPoint(ev.x, ev.y);
                   if (!target) {
                       return;
                   }
                   this.updateFocus(target);
               }
-              target.control.mousemove.fire(new FormMouseMoveEvent(target.x, target.y, data.buttons, this, data.x - target.startX, data.y - target.startY, delta[0], delta[1], target === this._capture));
+              let hover = target.control;
+              let repaint = false;
+              let newHovered = new Set();
+              while (hover) {
+                  newHovered.add(hover);
+                  if (!hover.hovered) {
+                      hover.hovered = true;
+                      repaint = true;
+                  }
+                  hover = hover.parent;
+              }
+              for (const oldHover of hovered) {
+                  if (newHovered.has(oldHover)) {
+                      continue;
+                  }
+                  oldHover.hovered = false;
+                  repaint = true;
+              }
+              hovered = newHovered;
+              target.control.mousemove.fire(new FormMouseMoveEvent(target.x, target.y, ev.button, ev.buttons, this, ev.x - target.startX, ev.y - target.startY, delta[0], delta[1], target === this._capture));
               if (restoreCapture && this._capture !== restoreCapture) {
-                  restoreCapture.update(data.x, data.y);
-                  restoreCapture.control.mouseup.fire(new FormMouseUpEvent(restoreCapture.x, restoreCapture.y, data.buttons, false));
+                  restoreCapture.update(ev.x, ev.y);
+                  restoreCapture.control.mouseup.fire(new FormMouseUpEvent(restoreCapture.x, restoreCapture.y, ev.button, ev.buttons, restoreCapture.control, false));
               }
               this._restoreCapture = null;
-              if (!this._capture && this.editing()) {
-                  this.repaint();
-              }
-              if (this._capture && this._dragCoordinates) {
+              repaint = repaint || (!this._capture && this.editing());
+              repaint = repaint || (this._capture !== null && this._dragCoordinates !== null);
+              if (repaint) {
                   this.repaint();
               }
           });
-          this.surface.mousedown.add(data => {
-              if (!data.primaryButton()) {
+          this.surface.mousedown.add(ev => {
+              if (!ev.primaryButton()) {
                   return;
               }
               if (this._capture) {
                   return;
               }
+              if (menuTimer) {
+                  menuTimer.cancel();
+                  menuTimer = null;
+              }
+              menuTimer = new Timer(() => {
+                  this.surface.contextmenu.fire(ev);
+              }, 400);
               this._bubbleMouseDown = true;
               let control = null;
               const exclude = [];
               while (this._bubbleMouseDown) {
-                  const hit = this.controlAtPoint(data.x, data.y, { exclude: exclude });
+                  const hit = this.controlAtPoint(ev.x, ev.y, { exclude: exclude });
                   if (!hit) {
                       break;
                   }
                   if (!control) {
                       control = hit.control;
                   }
-                  hit.control.mousedown.fire(new FormMouseDownEvent(hit.x, hit.y, data.buttons, this, hit, control));
+                  hit.control.mousedown.fire(new FormMouseDownEvent(hit.x, hit.y, ev.button, ev.buttons, this, hit, control));
                   exclude.push(hit.control);
               }
           });
-          this.surface.mouseup.add(data => {
-              if (data.primaryButton()) {
+          this.surface.mouseup.add(ev => {
+              if (ev.primaryButton()) {
                   return;
+              }
+              if (!ev.wasPrimary()) {
+                  return;
+              }
+              if (menuTimer) {
+                  menuTimer.cancel();
+                  menuTimer = null;
               }
               const wasCapture = this._capture !== null;
               let target = this._capture;
               if (target) {
-                  target.update(data.x, data.y);
+                  target.update(ev.x, ev.y);
                   if (this._dragCoordinates) {
-                      const dropHit = this.controlAtPoint(data.x, data.y);
+                      const dropHit = this.controlAtPoint(ev.x, ev.y);
                       if (dropHit) {
                           const dropTarget = dropHit.control;
                           if (dropTarget.allowDrop(this._dragData)) {
@@ -2285,15 +2243,15 @@
                   this.repaint();
               }
               else {
-                  target = this.controlAtPoint(data.x, data.y);
+                  target = this.controlAtPoint(ev.x, ev.y);
               }
               this.endCapture();
               if (target) {
-                  target.control.mouseup.fire(new FormMouseUpEvent(target.x, target.y, data.buttons, wasCapture));
+                  target.control.mouseup.fire(new FormMouseUpEvent(target.x, target.y, ev.button, ev.buttons, target.control, wasCapture));
               }
           });
-          this.surface.mousewheel.add(data => {
-              const hit = this.controlAtPoint(data.x, data.y);
+          this.surface.mousewheel.add(ev => {
+              const hit = this.controlAtPoint(ev.x, ev.y);
               if (hit) {
                   this.updateFocus(hit);
               }
@@ -2301,14 +2259,34 @@
           this.surface.mousedbl.add(ev => {
               const hit = this.controlAtPoint(ev.x, ev.y);
               if (hit) {
-                  hit.control.mousedbl.fire(new FormMouseUpEvent(hit.x, hit.y, ev.buttons, false));
+                  hit.control.mousedbl.fire(new FormMouseUpEvent(hit.x, hit.y, ev.button, ev.buttons, hit.control, false));
               }
           });
-          this.surface.keydown.add(data => {
+          this.surface.contextmenu.add(async (ev) => {
+              const exclude = [];
+              while (true) {
+                  const hit = this.controlAtPoint(ev.x, ev.y, { exclude: exclude, all: true });
+                  if (!hit) {
+                      break;
+                  }
+                  const items = await hit.control.contextMenu();
+                  if (items) {
+                      if (this._capture) {
+                          this._capture.update(ev.x, ev.y);
+                          this._capture.control.mouseup.fire(new FormMouseUpEvent(this._capture.x, this._capture.y, ev.button, ev.buttons, this._capture.control, true));
+                          this.endCapture();
+                      }
+                      this.add(new Menu(items), ev.x, ev.y);
+                      break;
+                  }
+                  exclude.push(hit.control);
+              }
+          });
+          this.surface.keydown.add(ev => {
               if (this._focus) {
                   let control = this._focus.control;
                   while (control) {
-                      control.keydown.fire(new FormKeyEvent(data.key));
+                      control.keydown.fire(new FormKeyEvent(ev.key));
                       control = control.parent;
                   }
               }
@@ -2332,9 +2310,11 @@
           this._focus = hit;
           this._focus.control.focused = true;
       }
-      paint(ctx) {
+      paintBackground(ctx) {
           ctx.fillStyle = 'white';
           ctx.fillRect(0, 0, this.w, this.h);
+      }
+      paint(ctx) {
           super.paint(ctx);
           if (this._capture && this._dragCoordinates) {
               ctx.save();
@@ -2422,6 +2402,18 @@
               return this.allowDom(control.parent);
           }
       }
+      controlAtPoint(x, y, opts) {
+          if (this._layers.length === 0) {
+              return super.controlAtPoint(x, y, opts);
+          }
+          const layer = this._layers[this._layers.length - 1];
+          opts = opts || {};
+          opts.formX = x;
+          opts.formY = y;
+          const cx = x - layer.x;
+          const cy = y - layer.y;
+          return layer.controlAtPoint(cx, cy, opts);
+      }
       pushLayer(control) {
           if (control.parent !== this) {
               return this.pushLayer(control.parent);
@@ -2477,19 +2469,489 @@
 
   //# sourceMappingURL=index.js.map
 
+  //# sourceMappingURL=box.js.map
+
+  var TextAlign;
+  (function (TextAlign) {
+      TextAlign[TextAlign["LEFT"] = 1] = "LEFT";
+      TextAlign[TextAlign["CENTER"] = 2] = "CENTER";
+  })(TextAlign || (TextAlign = {}));
+  var FontStyle;
+  (function (FontStyle) {
+      FontStyle[FontStyle["BOLD"] = 1] = "BOLD";
+      FontStyle[FontStyle["ITALIC"] = 2] = "ITALIC";
+      FontStyle[FontStyle["STRIKETHROUGH"] = 4] = "STRIKETHROUGH";
+      FontStyle[FontStyle["UNDERLINE"] = 8] = "UNDERLINE";
+  })(FontStyle || (FontStyle = {}));
+  class TextControl extends Control {
+      constructor(text, icon) {
+          super();
+          this._fontName = null;
+          this._fontSize = null;
+          this._color = null;
+          this._text = text || '';
+          this._icon = icon || null;
+      }
+      get text() {
+          if (this._text instanceof Function) {
+              return this._text();
+          }
+          else {
+              return this._text;
+          }
+      }
+      get icon() {
+          if (this._icon instanceof Function) {
+              return this._icon();
+          }
+          else {
+              return this._icon;
+          }
+      }
+      get iconCode() {
+          const icon = this.icon;
+          if (icon) {
+              return icon.split(',')[1];
+          }
+          else {
+              return null;
+          }
+      }
+      get iconFontName() {
+          const icon = this.icon;
+          if (icon) {
+              return icon.split(',')[0];
+          }
+          else {
+              return null;
+          }
+      }
+      set text(text) {
+          this._text = text;
+          this.repaint();
+      }
+      set textCallback(text) {
+          this._text = text;
+          this.repaint();
+      }
+      set icon(icon) {
+          this._icon = icon;
+          this.repaint();
+      }
+      set iconCallback(icon) {
+          this._icon = icon;
+          this.repaint();
+      }
+      setFont(name, size, color) {
+          this._fontName = name || this._fontName;
+          this._fontSize = size || this._fontSize;
+          this._color = color || this._color;
+          this.repaint();
+      }
+      set fontName(name) {
+          this._fontName = name;
+          this.repaint();
+      }
+      set fontSize(size) {
+          this._fontSize = size;
+          this.repaint();
+      }
+      setStyleIf(style, enable) {
+          if (enable === true) {
+              this.addStyle(style);
+          }
+          else if (enable === false) {
+              this.removeStyle(style);
+          }
+          else {
+              this._style = style;
+          }
+      }
+      get style() {
+          return this._style;
+      }
+      set style(style) {
+          this._style = style;
+      }
+      addStyle(style) {
+          this._style |= style;
+      }
+      removeStyle(style) {
+          this._style &= ~style;
+      }
+      hasStyle(style) {
+          return (this._style & style) !== 0;
+      }
+      toggleStyle(style) {
+          this.setStyleIf(style, !this.hasStyle(style));
+      }
+      getFont() {
+          let prefix = '';
+          if (this._style & FontStyle.BOLD) {
+              prefix += 'bold ';
+          }
+          if (this._style & FontStyle.ITALIC) {
+              prefix += 'italic ';
+          }
+          return prefix + this.getFontSize() + 'px ' + this.getFontName();
+      }
+      getFontName() {
+          return this._fontName || 'sans';
+      }
+      getFontSize() {
+          return this._fontSize || 18;
+      }
+      get color() {
+          return this._color || '#202020';
+      }
+      set color(color) {
+          this._color = color;
+          this.repaint();
+      }
+  }
+  //# sourceMappingURL=textcontrol.js.map
+
+  class Button extends TextControl {
+      constructor(text, icon) {
+          super(text, icon);
+          this.down = false;
+          this.active = false;
+          this.border = true;
+          this.click = new EventSource();
+          this.mousedown.add((ev) => {
+              this.down = true;
+              ev.capture();
+              ev.cancelBubble();
+              this.repaint();
+          });
+          this.mouseup.add((ev) => {
+              if (!this.down) {
+                  return;
+              }
+              this.down = false;
+              if (ev.capture && this.inside(ev.x, ev.y)) {
+                  this.click.fire();
+              }
+              this.repaint();
+          });
+      }
+      paint(ctx) {
+          super.paint(ctx);
+          this.paintText(ctx);
+      }
+      paintText(ctx) {
+          ctx.font = this.getFont();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = this.color;
+          let x = this.w / 2;
+          if (this.iconCode) {
+              x += (this.getFontSize() + 5) / 2;
+          }
+          ctx.fillText(this.text, x, this.h / 2, this.w);
+          if (this.iconCode) {
+              ctx.font = this.getFontSize() + 'px ' + this.iconFontName;
+              ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center';
+              let w = Math.ceil(ctx.measureText(this.text).width);
+              x = this.w / 2;
+              if (this.text) {
+                  x -= w / 2 + 5;
+              }
+              ctx.fillText(this.iconCode, x, this.h / 2);
+          }
+      }
+      paintBackground(ctx) {
+          if (this.down) {
+              ctx.fillStyle = '#ff9800';
+          }
+          else if (this.active) {
+              ctx.fillStyle = '#ffaa44';
+          }
+          else {
+              ctx.fillStyle = '#ffeecc';
+          }
+          this.paintBorderPath(ctx);
+          if (this.down) {
+              ctx.shadowColor = '#c0c0c0';
+              ctx.shadowBlur = 8;
+              ctx.shadowOffsetX = 3;
+              ctx.shadowOffsetY = 3;
+          }
+          ctx.fill();
+          ctx.shadowColor = 'transparent';
+          if (this.parent instanceof ButtonGroup) {
+              if (this !== this.parent.controls[0]) {
+                  ctx.beginPath();
+                  ctx.moveTo(0, 0);
+                  ctx.lineTo(0, this.h);
+                  ctx.strokeStyle = '#cc8020';
+                  ctx.lineWidth = 1;
+                  ctx.stroke();
+              }
+          }
+      }
+      paintBorder(ctx) {
+          if (this.down || this.hovered) {
+              ctx.strokeStyle = 'black';
+          }
+          else {
+              ctx.strokeStyle = '#cc8020';
+          }
+          ctx.lineWidth = 1;
+          ctx.lineJoin = 'round';
+          this.paintBorderPath(ctx);
+          ctx.stroke();
+      }
+      paintBorderPath(ctx) {
+          if (this.border) {
+              const r = 6;
+              let rl = r;
+              let rr = r;
+              if (this.parent instanceof ButtonGroup) {
+                  if (this !== this.parent.controls[0]) {
+                      rl = 0;
+                  }
+                  if (this !== this.parent.controls[this.parent.controls.length - 1]) {
+                      rr = 0;
+                  }
+              }
+              ctx.beginPath();
+              ctx.moveTo(rl, 0);
+              ctx.lineTo(this.w - rr, 0);
+              ctx.arcTo(this.w, 0, this.w, rr, rr);
+              ctx.lineTo(this.w, this.h - rr);
+              ctx.arcTo(this.w, this.h, this.w - rr, this.h, rr);
+              ctx.lineTo(rl, this.h);
+              ctx.arcTo(0, this.h, 0, this.h - rl, rl);
+              ctx.lineTo(0, rl);
+              ctx.arcTo(0, 0, rl, 0, rl);
+          }
+          else {
+              ctx.moveTo(0, 0);
+              ctx.lineTo(this.w, 0);
+              ctx.lineTo(this.w, this.h);
+              ctx.lineTo(0, this.h);
+              ctx.closePath();
+          }
+      }
+      setActive(value) {
+          this.active = value;
+          this.setStyleIf(FontStyle.BOLD, value);
+          this.repaint();
+      }
+  }
+  class ButtonGroup extends Control {
+      constructor() {
+          super();
+      }
+      add(control, x, y, w, h, x2, y2, xw, yh, x2w, y2h) {
+          if (!(control instanceof Button)) {
+              throw new Error('Only Buttons can be added to ButtonGroups');
+          }
+          super.add(control);
+          control.coords.y.set(0);
+          control.coords.y2.set(0);
+          if (this.fill) {
+              this.fill.remove();
+              this.fill = null;
+          }
+          if (this.end) {
+              this.end.remove();
+              this.end = null;
+          }
+          if (this.controls.length === 1) {
+              control.coords.x.set(0);
+          }
+          this.end = control.coords.x2.set(0);
+          if (this.controls.length >= 2) {
+              control.coords.x.align(this.controls[this.controls.length - 2].coords.xw);
+              this.fill = new FillConstraint(this.controls, Coord.W);
+          }
+          return control;
+      }
+  }
+  //# sourceMappingURL=button.js.map
+
+  class CheckBoxToggleEvent extends ControlEvent {
+      constructor(control, checked) {
+          super(control);
+          this.checked = checked;
+      }
+  }
+  class CheckBox extends TextControl {
+      constructor(text, checked) {
+          super(text);
+          this.checked = false;
+          this.down = false;
+          this.checked = this.checked || false;
+          this.on = new EventSource();
+          this.off = new EventSource();
+          this.toggle = new EventSource();
+          this.mousedown.add((ev) => {
+              this.down = true;
+              ev.capture();
+              this.repaint();
+          });
+          this.mouseup.add((ev) => {
+              if (!this.down) {
+                  return;
+              }
+              if (ev.capture && this.inside(ev.x, ev.y)) {
+                  this.setChecked(!this.checked);
+              }
+              this.down = false;
+              this.repaint();
+          });
+      }
+      setChecked(checked) {
+          if (this.checked === checked) {
+              return;
+          }
+          if (this.radio) {
+              this.radio.clear(this);
+          }
+          this.checked = checked;
+          const ev = new CheckBoxToggleEvent(this, this.checked);
+          this.toggle.fire(ev);
+          if (this.checked) {
+              this.on.fire(ev);
+          }
+          else {
+              this.off.fire(ev);
+          }
+      }
+      paint(ctx) {
+          super.paint(ctx);
+          ctx.fillStyle = 'white';
+          if (this.down) {
+              ctx.strokeStyle = 'orange';
+          }
+          else {
+              ctx.strokeStyle = 'black';
+          }
+          ctx.lineJoin = 'round';
+          if (this.radio) {
+              ctx.beginPath();
+              ctx.lineWidth = 1.2;
+              ctx.arc(this.h / 2, this.h / 2, this.h / 2, 0, 2 * Math.PI);
+              ctx.fill();
+              ctx.stroke();
+          }
+          else {
+              ctx.fillRect(0, 0, this.h, this.h);
+              ctx.lineWidth = 1;
+              ctx.strokeRect(0, 0, this.h, this.h);
+          }
+          if (this.checked) {
+              ctx.fillStyle = 'orange';
+              if (this.radio) {
+                  ctx.beginPath();
+                  ctx.arc(this.h / 2, this.h / 2, this.h / 2 - 3, 0, 2 * Math.PI);
+                  ctx.fill();
+              }
+              else {
+                  ctx.fillRect(3, 3, this.h - 6, this.h - 6);
+              }
+          }
+          ctx.font = this.getFont();
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = this.color;
+          ctx.fillText(this.text, this.h + 7, this.h / 2, this.w - this.h - 4);
+      }
+  }
+  class RadioGroup {
+      constructor(checkboxes) {
+          this.checkboxes = [];
+          if (checkboxes) {
+              for (const checkbox of checkboxes) {
+                  this.add(checkbox);
+              }
+          }
+      }
+      add(checkbox) {
+          checkbox.radio = this;
+          this.checkboxes.push(checkbox);
+      }
+      clear(selected) {
+          for (const checkbox of this.checkboxes) {
+              if (checkbox === selected) {
+                  continue;
+              }
+              checkbox.setChecked(false);
+          }
+      }
+  }
+  //# sourceMappingURL=checkbox.js.map
+
+  class Modal extends Control {
+      constructor(dialog) {
+          super();
+          this.dialog = dialog;
+          this.add(dialog);
+          this.mousedown.add((ev) => {
+              ev.cancelBubble();
+          });
+      }
+      paint(ctx) {
+          const a = ctx.globalAlpha;
+          ctx.globalAlpha *= 0.5;
+          ctx.fillStyle = 'black';
+          ctx.fillRect(0, 0, this.w, this.h);
+          ctx.globalAlpha = a;
+          super.paint(ctx);
+      }
+      selfConstrain() {
+          this.x = 0;
+          this.y = 0;
+          this.x2 = 0;
+          this.y2 = 0;
+          return true;
+      }
+      static show(dialog, f) {
+          const modal = new Modal(dialog);
+          f.add(modal);
+          f.pushLayer(modal);
+          return new Promise(async (resolve) => {
+              modal.opacity = 0;
+              await new OpacityAnimator(modal, 0, 1, 200).start();
+              modal._resolve = resolve;
+          });
+      }
+      async close(data) {
+          await new OpacityAnimator(this, 1, 0, 200).start();
+          this.form().popLayer(this);
+          this.remove();
+          if (this._resolve) {
+              this._resolve(data);
+              this._resolve = null;
+          }
+      }
+  }
+  //# sourceMappingURL=modal.js.map
+
   class TextBoxChangeEvent extends ControlEvent {
       constructor(control, text) {
           super(control);
           this.text = text;
       }
   }
-  class _TextBox extends Control {
+  class _TextBox extends TextControl {
       constructor(text) {
-          super();
+          super(text);
           this.multiline = false;
           this.elem = null;
-          this.text = text || '';
+          this._align = TextAlign.LEFT;
+          this.border = true;
           this.change = new EventSource();
+      }
+      get align() {
+          return this._align;
+      }
+      set align(value) {
+          this._align = value;
+          this.repaint();
       }
       unpaint() {
           if (this.elem) {
@@ -2499,7 +2961,6 @@
           }
       }
       paint(ctx) {
-          super.paint(ctx);
           if (this.elem && !this.form().allowDom(this)) {
               this.unpaint();
           }
@@ -2507,15 +2968,7 @@
               this.positionElem();
           }
           ctx.clearRect(0, 0, this.w, this.h);
-          if (this.dragTarget) {
-              ctx.strokeStyle = 'cornflowerblue';
-          }
-          else {
-              ctx.strokeStyle = 'black';
-          }
-          ctx.lineWidth = 1;
-          ctx.lineJoin = 'round';
-          ctx.strokeRect(0, 0, this.w, this.h);
+          super.paint(ctx);
           if (!this.elem) {
               ctx.font = this.getFont();
               let y = 3;
@@ -2526,10 +2979,20 @@
                   ctx.textBaseline = 'middle';
                   y = Math.round(this.h / 2);
               }
-              ctx.fillStyle = this.getColor();
+              if (this._align === TextAlign.CENTER) {
+                  ctx.textAlign = 'center';
+              }
+              else {
+                  ctx.textAlign = 'left';
+              }
+              let x = 3;
+              if (this._align === TextAlign.CENTER) {
+                  x = this.w / 2 + 1;
+              }
+              ctx.fillStyle = this.color;
               const lines = this.text.split('\n');
               for (let i = 0; i < lines.length; ++i) {
-                  ctx.fillText(lines[i], 3, y + i * (this.getFontSize() + 3));
+                  ctx.fillText(lines[i], x, y + i * (this.getFontSize() + 3));
               }
           }
       }
@@ -2549,6 +3012,9 @@
           this.elem.style.paddingLeft = '3px';
           this.elem.style.fontSize = this.form().surface.htmlunits(this.getFontSize()) + 'px';
           this.elem.style.fontFamily = this.getFontName();
+          this.elem.style.fontWeight = this.hasStyle(FontStyle.BOLD) ? ' bold' : 'normal';
+          this.elem.style.fontStyle = this.hasStyle(FontStyle.ITALIC) ? ' italic' : 'normal';
+          this.elem.style.textAlign = this._align === TextAlign.CENTER ? 'center' : 'left';
           this.elem.addEventListener('input', (ev) => {
               this.text = this.elem.value;
               this.change.fire(new TextBoxChangeEvent(this, this.text));
@@ -2557,10 +3023,6 @@
               if (ev.keyCode === 13) {
                   this.parent.submit();
               }
-          });
-          this.elem.addEventListener('blur', (ev) => {
-              this.unpaint();
-              this.repaint();
           });
           this.context().canvas.parentElement.insertBefore(this.elem, this.context().canvas);
       }
@@ -2579,11 +3041,7 @@
           return typeof data === 'string';
       }
       drop(data) {
-          this.setText(data);
-      }
-      setText(text) {
-          this.text = text;
-          this.repaint();
+          this.text = data;
       }
   }
   class TextBox extends _TextBox {
@@ -2608,10 +3066,11 @@
               this.positionElem();
               setTimeout(() => {
                   this.elem.focus();
+                  const text = this.text;
                   if (!this.multiline) {
                       this.context().font = this.getFont();
-                      for (let i = 0; i < this.text.length; ++i) {
-                          if (data.x < this.context().measureText(this.text.substr(0, i)).width) {
+                      for (let i = 0; i < text.length; ++i) {
+                          if (data.x < this.context().measureText(text.substr(0, i)).width) {
                               this.elem.setSelectionRange(i - 1, i - 1);
                               break;
                           }
@@ -2621,41 +3080,105 @@
               this.repaint();
           });
       }
+      createElem() {
+          super.createElem();
+          this.elem.addEventListener('blur', (ev) => {
+              this.unpaint();
+              this.repaint();
+          });
+      }
   }
   //# sourceMappingURL=textbox.js.map
 
   class Label extends TextControl {
-      constructor(text) {
-          super(text);
-          this.fit = false;
+      constructor(text, icon) {
+          super(text, icon);
+          this._fit = false;
+          this._align = TextAlign.LEFT;
+      }
+      get align() {
+          return this._align;
+      }
+      set align(value) {
+          this._align = value;
+          this.repaint();
+      }
+      get fit() {
+          return this._fit;
+      }
+      set fit(value) {
+          this._fit = value;
+          this.relayout();
       }
       paint(ctx) {
           super.paint(ctx);
           ctx.font = this.getFont();
           ctx.textBaseline = 'middle';
-          ctx.fillStyle = this.getColor();
-          const lines = this.evalText().split('\n');
+          ctx.fillStyle = this.color;
+          if (this._align === TextAlign.CENTER) {
+              ctx.textAlign = 'center';
+          }
+          else {
+              ctx.textAlign = 'left';
+          }
+          const lines = this.text.split('\n');
           const lineHeight = (this.getFontSize() + 3);
           const y = this.h / 2 - lineHeight * (lines.length - 1) / 2;
+          let x = 0;
+          if (this._align === TextAlign.CENTER) {
+              x = this.w / 2;
+              if (this.iconCode) {
+                  x += (this.getFontSize() + 10) / 2;
+              }
+          }
+          else {
+              if (this.iconCode) {
+                  x += this.getFontSize() + 10;
+              }
+          }
+          let w = 0;
           for (let i = 0; i < lines.length; ++i) {
-              ctx.fillText(lines[i], 0, y + i * lineHeight);
+              ctx.fillText(lines[i], x, y + i * lineHeight);
+              w = Math.max(w, Math.ceil(ctx.measureText(lines[i]).width));
+          }
+          if (this.iconCode) {
+              ctx.font = this.getFontSize() + 'px ' + this.iconFontName;
+              ctx.textBaseline = 'middle';
+              ctx.textAlign = 'center';
+              if (this._align === TextAlign.CENTER) {
+                  x = this.w / 2 - (this.getFontSize() + 10) / 2 - w;
+              }
+              else {
+                  x = this.getFontSize() / 2;
+              }
+              ctx.fillText(this.iconCode, x, this.h / 2);
           }
       }
-      setText(text) {
-          super.setText(text);
-          if (this.fit) {
+      get text() {
+          return super.text;
+      }
+      set text(text) {
+          super.text = text;
+          if (this._fit) {
               this.relayout();
           }
       }
       selfConstrain() {
-          if (!this.fit) {
+          if (!this._fit) {
               return false;
           }
+          const text = this.text;
           this.context().font = this.getFont();
-          const lines = this.evalText().split('\n');
+          const lines = text.split('\n');
           this.w = 0;
           for (const line of lines) {
-              this.w = Math.max(this.w, Math.ceil(this.context().measureText(this.evalText()).width) + 10);
+              this.w = Math.max(this.w, Math.ceil(this.context().measureText(line).width) + 10);
+          }
+          if (this.iconCode) {
+              this.w += this.getFontSize();
+              if (this.text) {
+                  this.w += 10;
+              }
           }
           this.h = Math.max(this.form().defaultHeight(), lines.length * (this.getFontSize() + 3));
           return true;
@@ -2719,14 +3242,14 @@
       }
   }
   class PromptDialog extends Dialog {
-      constructor(prompt) {
+      constructor(prompt, text) {
           super();
           const l = this.add(new Label(prompt), 20, 20);
           l.fit = true;
-          this.name = this.add(new TextBox(), 20, 54);
+          this.name = this.add(new TextBox(text), 20, 54);
           this.name.coords.x2.set(20);
           this.add(new Button('Cancel'), { x2: 20, y2: 20 }).click.add(() => {
-              this.close('Cancel');
+              this.close(null);
           });
           this.add(new Button('OK'), { x2: 190, y2: 20 }).click.add(() => {
               this.close(this.name.text);
@@ -2746,30 +3269,40 @@
       constructor(x, y) {
           super();
           this._bounds = new Map();
+          this._snap = new Map();
+          this._down = false;
           this._startX = x;
           this._startY = y;
           this._bounds.set(CoordAxis.X, [null, null]);
           this._bounds.set(CoordAxis.Y, [null, null]);
+          this.moved = new EventSource();
           let down = null;
           this.mousedown.add((data) => {
+              this._down = true;
               data.capture();
               data.cancelBubble();
               down = data;
               this._startX = this.x;
               this._startY = this.y;
+              this.repaint();
           });
           this.mouseup.add((data) => {
+              this._down = false;
               down = null;
           });
           this.mousemove.add((data) => {
               if (!down) {
                   return;
               }
+              let moved = false;
               if (this._xConstraint) {
-                  this._xConstraint.set(this.clamp(CoordAxis.X, this._startX + data.dragX));
+                  moved = this._xConstraint.set(this.clamp(CoordAxis.X, this._startX + this.snap(CoordAxis.X, data.dragX))) || moved;
               }
               if (this._yConstraint) {
-                  this._yConstraint.set(this.clamp(CoordAxis.Y, this._startY + data.dragY));
+                  moved = this._yConstraint.set(this.clamp(CoordAxis.Y, this._startY + this.snap(CoordAxis.Y, data.dragY))) || moved;
+              }
+              if (moved) {
+                  this.moved.fire();
               }
           });
       }
@@ -2783,15 +3316,27 @@
           }
           return v;
       }
+      snap(axis, v) {
+          const snap = this._snap.get(axis);
+          if (snap) {
+              return Math.round(v / snap) * snap;
+          }
+          else {
+              return v;
+          }
+      }
       setBound(axis, min, max) {
           this._bounds.set(axis, [min, max]);
       }
+      setSnap(axis, snap) {
+          this._snap.set(axis, snap);
+      }
       added() {
           super.added();
-          if (this._startX) {
+          if (this._startX !== null) {
               this._xConstraint = this.coords.x.set(this._startX);
           }
-          if (this._startY) {
+          if (this._startY !== null) {
               this._yConstraint = this.coords.y.set(this._startY);
           }
       }
@@ -2803,9 +3348,16 @@
               return new CoordAnimator(this._yConstraint, min, max, duration, easing);
           }
       }
-      paint(ctx) {
-          super.paint(ctx);
-          ctx.fillStyle = '#f0f0f0';
+      paintBackground(ctx) {
+          if (this._down) {
+              ctx.fillStyle = '#fff0f8';
+          }
+          else if (this.hovered) {
+              ctx.fillStyle = '#fff8f0';
+          }
+          else {
+              ctx.fillStyle = '#f0f0f0';
+          }
           ctx.fillRect(0, 0, this.w, this.h);
       }
   }
@@ -2914,21 +3466,27 @@
   //# sourceMappingURL=scrollbox.js.map
 
   class ListItem extends Control {
-      constructor() {
+      constructor(value) {
           super();
+          this.value = value;
           this.selected = false;
           this.select = new EventSource();
       }
-      paint(ctx) {
+      paintBackground(ctx) {
           if (this.selected) {
               ctx.fillStyle = 'orange';
               ctx.fillRect(0, 0, this.w, this.h);
           }
-          super.paint(ctx);
       }
-      selfConstrain() {
-          this.h = this.form().defaultHeight();
-          return true;
+      paintBorder(ctx) {
+          ctx.strokeStyle = '#c0c0c0';
+          ctx.beginPath();
+          ctx.moveTo(0, this.h);
+          ctx.lineTo(this.w, this.h);
+          ctx.stroke();
+      }
+      defaultConstraints() {
+          this.coords.h.set(this.form().defaultHeight());
       }
       setSelected(value) {
           if (value === this.selected) {
@@ -2943,7 +3501,7 @@
   }
   class TextListItem extends ListItem {
       constructor(text) {
-          super();
+          super(text);
           this.draggable = false;
           const l = this.add(new Label(text), 5, 1, null, null, 3, 1);
           l.fit = false;
@@ -2957,7 +3515,7 @@
   }
   class CheckBoxListItem extends ListItem {
       constructor(text) {
-          super();
+          super(text);
           const c = this.add(new CheckBox(text), 3, 1, null, null, 3, 1);
       }
   }
@@ -2998,11 +3556,13 @@
               }
           });
       }
-      paint(ctx) {
-          super.paint(ctx);
+      paintBackground(ctx) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, this.w, this.h);
       }
-      addItem(item) {
-          const itemControl = new this.itemType(item);
+      addItem(item, itemType) {
+          itemType = itemType || this.itemType;
+          const itemControl = new itemType(item);
           itemControl.select.add(() => {
               for (const c of this.controls) {
                   if (c === itemControl) {
@@ -3024,10 +3584,10 @@
       selected() {
           for (const c of this.controls) {
               if (c.selected) {
-                  return true;
+                  return c.value;
               }
           }
-          return false;
+          return null;
       }
   }
   //# sourceMappingURL=list.js.map
@@ -3088,6 +3648,17 @@
 
   //# sourceMappingURL=spacer.js.map
 
+  class TreeLabel extends Label {
+      constructor(node) {
+          super(() => this.node.treeText());
+          this.node = node;
+          this.iconCallback = () => this.node.treeIcon();
+          this.fit = true;
+      }
+      async contextMenu() {
+          return await this.node.treeMenu();
+      }
+  }
   class TreeItem extends Control {
       constructor(tree, node) {
           super();
@@ -3097,14 +3668,13 @@
           this._open = false;
           this.clip = false;
           this.select = new EventSource();
-          this.label = this.add(new Label(() => this.node.treeText()), 22, 1);
-          this.label.fit = true;
+          this.label = this.add(new TreeLabel(this.node), TreeItem.ARROW_WIDTH, 1);
           this.mousedown.add((ev) => {
               if (ev.y > this.label.h) {
                   return;
               }
               this.setSelected(true);
-              if (ev.x < 22) {
+              if (ev.x < TreeItem.ARROW_WIDTH) {
                   this.toggle();
               }
               if (this.node.treeDrag()) {
@@ -3115,8 +3685,11 @@
               if (ev.y > this.label.h) {
                   return;
               }
-              if (ev.x > 22) {
+              if (ev.x > TreeItem.ARROW_WIDTH) {
                   this.toggle();
+                  if (!this.node.treeHasChildren()) {
+                      this.node.treeActivate();
+                  }
               }
           });
       }
@@ -3130,8 +3703,14 @@
               this.select.fire();
               this.tree.setSelected(this);
           }
+          if (this.selected) {
+              this.node.treeSelect();
+          }
       }
       toggle() {
+          if (!this.node.treeHasChildren()) {
+              return;
+          }
           if (this._open) {
               this.close();
           }
@@ -3140,8 +3719,11 @@
           }
       }
       open() {
+          if (!this.node.treeHasChildren()) {
+              return;
+          }
           this._open = true;
-          this.sub = this.add(new SubTree(this.tree, this.node), { x: 22 });
+          this.sub = this.add(new SubTree(this.tree, this.node), { x: TreeItem.ARROW_WIDTH });
           this.sub.coords.y.align(this.label.coords.yh);
           this.sub.coords.w.fit();
           this.sub.coords.h.fit(0, 20);
@@ -3168,28 +3750,31 @@
               ctx.fillStyle = this.dragTarget ? 'cornflowerblue' : 'orange';
               ctx.fillRect(0, 0, this.tree.scrollWidth(), this.label.h);
           }
-          const arrowX = 22 / 2;
-          const arrowY = this.label.h / 2;
-          ctx.beginPath();
-          if (this._open) {
-              ctx.moveTo(arrowX - 5, arrowY - 4);
-              ctx.lineTo(arrowX + 5, arrowY - 4);
-              ctx.lineTo(arrowX, arrowY + 4);
+          if (this.node.treeHasChildren()) {
+              const arrowX = TreeItem.ARROW_WIDTH / 2;
+              const arrowY = this.label.h / 2;
+              ctx.beginPath();
+              if (this._open) {
+                  ctx.moveTo(arrowX - 5, arrowY - 4);
+                  ctx.lineTo(arrowX + 5, arrowY - 4);
+                  ctx.lineTo(arrowX, arrowY + 4);
+              }
+              else {
+                  ctx.moveTo(arrowX - 4, arrowY - 5);
+                  ctx.lineTo(arrowX + 4, arrowY);
+                  ctx.lineTo(arrowX - 4, arrowY + 5);
+              }
+              ctx.closePath();
+              ctx.fillStyle = 'black';
+              ctx.fill();
           }
-          else {
-              ctx.moveTo(arrowX - 4, arrowY - 5);
-              ctx.lineTo(arrowX + 4, arrowY);
-              ctx.lineTo(arrowX - 4, arrowY + 5);
-          }
-          ctx.closePath();
-          ctx.fillStyle = 'black';
-          ctx.fill();
           super.paint(ctx);
       }
       inside(x, y) {
           return x >= 0 && y >= 0 && y < this.h;
       }
   }
+  TreeItem.ARROW_WIDTH = 32;
   class SubTree extends Control {
       constructor(tree, parentNode) {
           super();
@@ -3208,6 +3793,7 @@
           }
           ti.coords.w.fit();
           ti.coords.h.fit();
+          return ti;
       }
       added() {
           super.added();
@@ -3248,7 +3834,7 @@
           this.sub.coords.h.fit();
       }
       addRoot(node) {
-          this.sub.addItem(node);
+          return this.sub.addItem(node);
       }
       setSelected(node) {
           if (this.selected && this.selected !== node) {
@@ -3257,8 +3843,16 @@
           this.selected = node;
           node.setSelected(true);
       }
+      paintBackground(ctx) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, this.w, this.h);
+      }
   }
   //# sourceMappingURL=tree.js.map
+
+  //# sourceMappingURL=index.js.map
+
+  //# sourceMappingURL=ionicons.js.map
 
   //# sourceMappingURL=index.js.map
 
@@ -3315,7 +3909,7 @@
       const l = c.add(new Label(), 20, 150);
       b2.click.add(async () => {
           const result = await new PromptDialog('Enter some text:').modal(form);
-          l.setText('You clicked: ' + result);
+          l.text = 'You clicked: ' + result;
       });
       const b3 = c.add(new Button('Fill'), 10, 190);
       b3.click.add(() => {
@@ -3328,7 +3922,7 @@
       b.coords.center(CoordAxis.X);
       b.coords.center(CoordAxis.Y);
       b.click.add(() => {
-          b.setText('Thanks');
+          b.text = 'Thanks';
       });
   });
   makeDemo('Fill', () => {
@@ -3365,9 +3959,9 @@
       const b = c.add(new Button('Click me'), 10, 50);
       b.click.add(() => {
           if (cb.checked) {
-              b.setText('Thanks');
+              b.text = 'Thanks';
               setTimeout(() => {
-                  b.setText('Click me');
+                  b.text = 'Click me';
               }, 1000);
           }
       });
@@ -3381,12 +3975,12 @@
       const s1 = c.add(new Slider(4, 0, 20, 1), 10, 10, 400);
       const l1 = c.add(new Label('4'), 420, 10);
       s1.change.add(() => {
-          l1.setText(s1.value.toString());
+          l1.text = s1.value.toString();
       });
       const s2 = c.add(new Slider(20, 0, 100), 10, 50, 400);
       const l2 = c.add(new Label('20'), 420, 50);
       s2.change.add(() => {
-          l2.setText((Math.round(s2.value * 10) / 10).toString());
+          l2.text = (Math.round(s2.value * 10) / 10).toString();
       });
   });
   makeDemo('TextBox', () => {
@@ -3394,24 +3988,26 @@
       const l1 = c.add(new Label(t1.text), 10, 50);
       l1.fit = true;
       t1.change.add(() => {
-          l1.setText(t1.text);
+          l1.text = t1.text;
       });
       const t2 = c.add(new FocusTextBox('Created when focused'), 10, 140, 300, 60);
       const l2 = c.add(new Label(t2.text), 10, 210);
       l2.fit = true;
       t2.change.add(() => {
-          l2.setText(t2.text);
+          l2.text = t2.text;
       });
       const t3 = c.add(new FocusTextBox('Multi\nline\ntextbox'), 400, 10, 300, 200);
       t3.multiline = true;
       const l3 = c.add(new Label(t3.text), 400, 220);
       l3.fit = true;
       t3.change.add(() => {
-          l3.setText(t3.text);
+          l3.text = t3.text;
       });
   });
   makeDemo('Grabber', () => {
       const g = c.add(new Grabber(100, 100));
+      g.setSnap(CoordAxis.X, 20);
+      g.setSnap(CoordAxis.Y, 20);
       g.coords.size(30, 30);
       g.setBound(CoordAxis.X, 50);
       g.setBound(CoordAxis.Y, 50);
@@ -3421,16 +4017,15 @@
   });
   class CustomListItem extends ListItem {
       constructor(text) {
-          super();
+          super(text);
           const b = this.add(new Button(''), { x: 3, y: 3, w: 20, y2: 3 });
           b.click.add(() => {
               this.setSelected(true);
           });
           this.add(new Label(text), { x: 30, y: 3, x2: 3, y2: 3 });
       }
-      selfConstrain() {
-          this.h = 40;
-          return true;
+      defaultConstraints() {
+          this.coords.h.set(40);
       }
   }
   makeDemo('List', () => {
@@ -3456,6 +4051,16 @@
       treeText() {
           return this.name;
       }
+      treeIcon() {
+          return null;
+      }
+      treeHasChildren() {
+          return true;
+      }
+      treeSelect() {
+      }
+      treeActivate() {
+      }
       async treeChildren() {
           await delay(300);
           let children = [];
@@ -3479,6 +4084,13 @@
       treeDrop(data) {
           this.extra.push(data);
       }
+      async treeMenu() {
+          return [
+              new MenuItem('One'),
+              new MenuItem('Two'),
+              new MenuItem('Three'),
+          ];
+      }
   }
   makeDemo('Tree', () => {
       const tree = c.add(new Tree(), 10, 10, 200, 500);
@@ -3488,9 +4100,9 @@
   makeDemo('Button', () => {
       const b1 = c.add(new Button('Hello'), 10, 10);
       b1.click.add(async () => {
-          b1.setText('Goodbye');
+          b1.text = 'Goodbye';
           await delay(1000);
-          b1.setText('Hello');
+          b1.text = 'Hello';
       });
       const g1 = c.add(new ButtonGroup(), 10, 100, 400, 32);
       const gb1 = g1.add(new Button('One'));
@@ -3507,7 +4119,7 @@
       const a1 = b1.coords.x.set(10).animate(10, 800, 1000, Easing.easeInOutCubic);
       b1.click.add(async () => {
           await a1.start();
-          b1.setText('There');
+          b1.text = 'There';
       });
       for (let i = 0; i < 6; ++i) {
           const b = c.add(new Button(`${i}`), 10 + i * 170, 50);
@@ -3541,7 +4153,39 @@
       const l1 = s1.add(new Label('hello'), 10, 600);
       const l2 = s2.add(new Label('hello'), 10, 600);
   });
-  //# sourceMappingURL=demo.js.map
+  class MenuButton extends Button {
+      async contextMenu() {
+          const remove = new MenuItem('Remove');
+          remove.click.add(async () => {
+              await new OpacityAnimator(this, 1, 0.1, 200).start();
+              this.remove();
+          });
+          const text = new MenuItem('Change Text');
+          text.click.add(() => {
+              this.text = 'Menu';
+          });
+          const bold = new MenuItem('Bold');
+          bold.click.add(() => {
+              this.toggleStyle(FontStyle.BOLD);
+          });
+          const italic = new MenuItem('Italic');
+          italic.click.add(() => {
+              this.toggleStyle(FontStyle.ITALIC);
+          });
+          return [
+              remove,
+              text,
+              new MenuSeparatorItem(),
+              bold,
+              italic,
+          ];
+      }
+  }
+  makeDemo('Context Menu', () => {
+      for (let i = 0; i < 6; ++i) {
+          const b = c.add(new MenuButton(`${i}`), 10 + i * 170, 50);
+      }
+  });
 
 }());
 //# sourceMappingURL=demo.bundle.js.map
