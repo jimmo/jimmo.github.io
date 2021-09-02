@@ -1,0 +1,268 @@
+<!doctype html>
+<html>
+<body>
+    <canvas style="width:1000px;height:1000px;xborder: 1px solid red;" id="canvas">
+    </canvas>
+    <script type="text/javascript">
+
+        // Represents a single point charge.
+        function Charge(x, y, q, fn) {
+            this.x = x;
+            this.y = y;
+            this.q = q;
+            this.vx = 0;
+            this.vy = 0;
+            this.m = 1e-10;
+            this.fn = fn;
+        }
+
+        // This will be calculated from the DOM element.
+        let CANVAS_WIDTH = 0;
+        let CANVAS_HEIGHT = 0;
+
+        // Use zero as the origin, placed at the centre of the canvas.
+        // In metres.
+        const SPACE_WIDTH = 40;
+        const SPACE_HEIGHT = 40;
+
+        // How far apart to draw the field vectors (in space coordinates).
+        const SPACE_GRID = 0.7;
+
+        // Constants.
+        const e0 = 8.8541878128e-12;
+        const k = 1/(4 * Math.PI * e0);
+
+        // Default small charge.
+        const q = 1e-9;
+
+        // For showing the field at cursor.
+        mouseX = 0;
+        mouseY = 0;
+
+        // Constrain a charge to move on a circle.
+        // Highly inaccurate -- just does the regular movement then clamps back to the circle.
+        function constrainCircle(cx, cy, cr) {
+            return (c, ax, ay, dt) => {
+                c.vx += dt * ax;
+                c.vy += dt * ay;
+                c.vx *= 0.6;
+                c.vy *= 0.6;
+
+                c.x += c.vx * dt;
+                c.y += c.vy * dt;
+
+                const dx = c.x - cx;
+                const dy = c.y - cy;
+
+                const rr = Math.hypot(dx, dy);
+
+                c.x = cx + dx * cr/rr;
+                c.y = cy + dy * cr/rr;
+
+            }
+        }
+
+        // Constrain a charge to move on a line. Projects the acceleration onto the line.
+        function constrainLine(x1, y1, x2, y2) {
+            const _dx = x2-x1;
+            const _dy = y2-y1;
+            const _d = Math.hypot(_dx, _dy);
+            const ux = _dx/_d;
+            const uy = _dy/_d;
+            return (c, ax, ay, dt) => {
+                const px = ux * (ax * ux + ay * uy) / (ux * ux + uy * uy);
+                const py = uy * (ax * ux + ay * uy) / (ux * ux + uy * uy);
+
+                c.vx += dt * px;
+                c.vy += dt * py;
+                c.vx *= 0.9;
+                c.vy *= 0.9;
+
+                c.x += c.vx * dt;
+                c.y += c.vy * dt;
+            }
+        }
+
+        // Charges in the simulation.
+        let charges = [
+        ];
+
+        function makeSurfaceCharges(n, r1, r2) {
+            const shellInside = constrainCircle(0, 0, r1);
+            const shellOutside = constrainCircle(0, 0, r2);
+            for (let i = 0; i < n; ++i) {
+                const theta = 2*Math.PI*i/n;
+                const cin = new Charge(r1 * Math.cos(theta), r1 * Math.sin(theta), -q, shellInside);
+                charges.push(cin);
+                const cout = new Charge(r2 * Math.cos(theta + 0.1), r2 * Math.sin(theta + 0.1), q, shellOutside);
+                // Cheating -- force the outer charges to stay uniform (they converge on this anyway, but it makes the simulation converge faster).
+                cout.m = 1000;
+                charges.push(cout);
+            }
+        }
+
+        makeSurfaceCharges(100, 9, 12);
+
+        // Add a large off-centre charge (with high mass so it doesn't move).
+        const pp = new Charge(-5, 0, 100 * q);
+        pp.m = 1000;
+        charges.push(pp);
+
+        // Calculate the electic field at coordinate.
+        function fieldAt(x, y) {
+            let ex = 0;
+            let ey = 0;
+
+            for (let i = 0; i < charges.length; ++i) {
+                const c = charges[i];
+                const dx = x - c.x;
+                const dy = y - c.y;
+                const d = Math.hypot(dx, dy);
+                if (d < 0.01) {
+                    continue;
+                }
+                const E = k * c.q / (d); // Note: d not d^2 because 2D.
+                ex += E * dx/d;
+                ey += E * dy/d;
+            }
+
+            return [ex, ey];
+        }
+
+        // 2D linear interpolate.
+        function lerp(x1, x2, y1, y2, v) {
+            return ((v - x1) / (x2 - x1)) * (y2 - y1) + y1;
+        }
+
+        // Map canvas (pixel) coordinates to space coordinates.
+        function canvasToSpace(x, y) {
+            return [lerp(0, CANVAS_WIDTH, -SPACE_WIDTH/2, SPACE_WIDTH/2, x), lerp(0, CANVAS_HEIGHT, -SPACE_HEIGHT/2, SPACE_HEIGHT/2, y)];
+        }
+
+        // Map space coordinates to canvas (pixel) coordinates.
+        function spaceToCanvas(x, y) {
+            return [lerp(-SPACE_WIDTH/2, SPACE_WIDTH/2, 0, CANVAS_WIDTH, x), lerp(-SPACE_HEIGHT/2, SPACE_HEIGHT/2, 0, CANVAS_HEIGHT, y)];
+        }
+
+        // Avoid being blurry on HDPI monitors -- scale canvas appropriately.
+        function fixDPI(ctx) {
+            const dpi = window.devicePixelRatio;
+            const styleHeight = +getComputedStyle(canvas).getPropertyValue("height").slice(0, -2);
+            const styleWidth = +getComputedStyle(canvas).getPropertyValue("width").slice(0, -2);
+            canvas.setAttribute('width', styleWidth * dpi);
+            canvas.setAttribute('height', styleHeight * dpi);
+            [CANVAS_WIDTH, CANVAS_HEIGHT] = [styleWidth * dpi, styleHeight * dpi];
+        }
+
+        // Advance simulation one time step (in seconds).
+        function update(ctx, dt) {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw the charges.
+            for (let i = 0; i < charges.length; ++i) {
+                let cx, cy;
+                const c = charges[i];
+                [cx, cy] = spaceToCanvas(c.x, c.y);
+
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                // Scale the size by approx cube root of charge.
+                ctx.arc(cx, cy, 8 * Math.pow(Math.abs(c.q/q), 0.3), 0, Math.PI * 2);
+                // Red for negative, blue for positive.
+                ctx.fillStyle = c.q < 0 ? "red" : "blue";
+                ctx.fill();
+            }
+
+            // Draw the field arrows on the grid.
+            for (let sx = -SPACE_WIDTH / 2 + SPACE_GRID; sx < SPACE_WIDTH / 2; sx += SPACE_GRID) {
+                for (let sy = -SPACE_HEIGHT / 2 + SPACE_GRID; sy < SPACE_HEIGHT / 2; sy += SPACE_GRID) {
+                    let cx, cy, ex, ey;
+                    [cx, cy] = spaceToCanvas(sx, sy);
+                    [ex, ey] = fieldAt(sx, sy);
+
+                    // Scale arrow length logarithmicaly.
+                    const d = Math.hypot(ex, ey);
+                    ex *= (10/d) * Math.log(1 + d) / Math.log(16);
+                    ey *= (10/d) * Math.log(1 + d) / Math.log(16);
+
+                    // Draw grid point as a small circle.
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Draw vector as a line from the point.
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(cx + ex, cy + ey);
+                    ctx.lineTo(cx + ex, cy + ey);
+                    ctx.stroke();
+                }
+            }
+
+            // Very bad physics simulation.
+            for (let i = 0; i < charges.length; ++i) {
+                // Find the field experienced by this charge.
+                const c = charges[i];
+                let ex, ey;
+                [ex, ey] = fieldAt(c.x, c.y);
+
+                // Convert field to force to acceleration.
+                [ax, ay] = [(ex * c.q) / c.m, (ey * c.q) / c.m];
+
+                if (c.fn) {
+                    // Apply constraint.
+                    c.fn(c, ax, ay, dt);
+                } else {
+                    // Simple velocity update based on applied force.
+                    c.vx += dt * ax;
+                    c.vy += dt * ay;
+                    c.vx *= 0.9;
+                    c.vy *= 0.9;
+
+                    c.x += c.vx * dt;
+                    c.y += c.vy * dt;
+                }
+            }
+
+            let ex, ey;
+            [ex, ey] = fieldAt(mouseX, mouseY);
+            let cx, cy;
+            [cx, cy] = spaceToCanvas(mouseX, mouseY);
+            ctx.font = '20px sans';
+            ctx.fillStyle = 'black';
+            ctx.fillText(Math.round(ex*10)/10 + "," + Math.round(ey*10)/10, cx, cy);
+        }
+
+        let timer = null;
+
+        var canvas = document.getElementById("canvas");
+        var ctx = canvas.getContext("2d");
+        fixDPI(ctx);
+
+        // Toggle running/stopped.
+        function runSimulation() {
+            if (timer) {
+                // Stop simulation.
+                window.clearInterval(timer);
+                timer = null;
+            } else {
+                // 10ms update interval.
+                timer = window.setInterval(() => {
+                    update(ctx, 0.01);
+                }, 10);
+            }
+        }
+
+        function updateMouse(event) {
+            [mouseX, mouseY] = canvasToSpace(event.offsetX * window.devicePixelRatio, event.offsetY * window.devicePixelRatio);
+        }
+
+        // Render one frame.
+        update(ctx, 0.01);
+
+        canvas.addEventListener('click', runSimulation);
+        canvas.addEventListener('mousemove', updateMouse);
+    </script>
+</body>
+</html>
