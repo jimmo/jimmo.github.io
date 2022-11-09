@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>Jim's Diversified Holdings</title>
     <style>
      * {
        margin: 0;
@@ -40,21 +41,25 @@
        color: white;
      }
 
-     h2 > span {
-       display: inline-block;
-       font-size: 30pt;
-       vertical-align: top;
-       text-align: center;
-       width: 80px;
-       height: 60px;
-       transition: font-size 0.2s;
-     }
-     h2 > span:hover {
-       font-size: 40pt;
-     }
-
      body {
        padding-top: 100px;
+     }
+
+     div#links {
+       padding-top: 60px;
+       font-family: noto sans mono, mono;
+       text-align: center;
+     }
+
+     a {
+       color: orange;
+       font-weight: bold;
+     }
+     a:visited {
+       color: orange;
+     }
+     a:hover {
+       color: red;
      }
     </style>
   </head>
@@ -62,17 +67,8 @@
     <h1>
       Jim's Diversified Holdings
     </h1>
-    <h2>
-      <span title="Sailing!">⛵</span>
-      <span title="Computers &amp; Programming!">💻</span>
-      <span title="Board Games!">🎲</span>
-      <span title="Home Automation!">💡</span>
-      <span title="Robots!">🤖</span>
-      <span title="Science!">🔬</span>
-      <span title="Electronics!">🔌</span>
-      <span title="Software Radio!">📻</span>
-      <span title="Rockets are cool!">🚀</span>
-      <span title="Fixing things!">🛠️</span>
-    </h2>
+    <div id="links">
+      ⛵ | <a href="http://blog.jimmo.id.au/">Blog</a> | <a href="https://github.com/jimmo">GitHub</a> | <a rel="me" href="https://mastodon.social/@jimmo">Mastodon</a> | <a href="https://twitter.com/jim_mussared">Twitter</a> | 🌴
+    </div>
   </body>
 </html>
